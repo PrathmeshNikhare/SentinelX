@@ -22,6 +22,9 @@ __pycache__/
 htmlcov/
 .coverage
 
+# Drizzle drift-check scratch (scripts/verify.py)
+.drift-check/
+
 # Playwright
 playwright-report/
 test-results/

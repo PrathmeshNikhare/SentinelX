@@ -18,7 +18,7 @@ Exit (every item must be shown with command output):
 10. `/verify-phase` returns APPROVED, `/handoff` writes `progress/handoffs/phase-00.md`, and STATUS.md, PHASE_LOG.md and CURRENT_HANDOFF.md are updated and committed.
 
 ## 01 Database
-Drizzle, PostgreSQL, schema (docs/04), migrations, database roles (D-022), seed/demo data, and reference data seeded from `fixtures/`: `ip_reputation` and `mitre_techniques` (D-020).
+Drizzle, PostgreSQL, schema (docs/04), migrations, database roles (D-022, D-031), and reference data seeded from `fixtures/`: `ip_reputation` and `mitre_techniques` (D-020). Demo events come from the Phase 03 generator, not a seed (D-032).
 Exit: clean migration from an empty DB, CRUD smoke tests, role permission tests (tool role cannot write).
 
 ## 02 Web Shell

@@ -2,8 +2,8 @@
 
 | Phase | Status | Handoff |
 |---|---|---|
-| 00 | READY_FOR_NEXT_PHASE | progress/handoffs/phase-00.md |
-| 01 | NOT_STARTED | — |
+| 00 | COMPLETE | progress/handoffs/phase-00.md |
+| 01 | READY_FOR_NEXT_PHASE | progress/handoffs/phase-01.md |
 | 02 | NOT_STARTED | — |
 | 03 | NOT_STARTED | — |
 | 04 | NOT_STARTED | — |

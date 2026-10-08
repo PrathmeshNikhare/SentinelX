@@ -167,7 +167,8 @@ def check_postgres() -> Result:
     if reply not in (b"S", b"N"):
         return Result(name, FAIL, f"{address[1]} is not PostgreSQL (reply {reply!r})")
     # Credentials: connect over the container network address so pg_hba enforces the password.
-    # ponytail: stdlib has no PostgreSQL client; replace with a host-side psycopg check once a service ships it (Phase 01+).
+    # Stdlib has no PostgreSQL client. A host-side password login is covered by the `web: db integration`
+    # check (node-postgres connects to the published port with DATABASE_URL credentials).
     login = (
         'PGPASSWORD="$POSTGRES_PASSWORD" psql -h postgres -U "$POSTGRES_USER" '
         '-d "$POSTGRES_DB" -tAc "select 1"'
@@ -221,6 +222,29 @@ def check_ollama() -> Result:
     return Result("ollama reachable", PASS if status == 200 else WARN, f"{url} HTTP {status}")
 
 
+def check_schema_drift(web: Path) -> Result:
+    """schema.ts must match the committed migrations: drizzle-kit generate on a scratch copy must add nothing."""
+    name = "web: schema matches migrations"
+    scratch = web / ".drift-check"  # relative: drizzle-kit resolves --out against cwd even if absolute
+    shutil.rmtree(scratch, ignore_errors=True)
+    try:
+        shutil.copytree(web / "drizzle", scratch / "drizzle")
+        before = set(os.listdir(scratch / "drizzle"))
+        proc = run(
+            ["npx", "drizzle-kit", "generate", "--dialect=postgresql",
+             "--schema=./src/db/schema.ts", "--out=./.drift-check/drizzle"],
+            cwd=web,
+        )
+        if proc.returncode != 0:
+            return Result(name, FAIL, tail(proc))
+        added = sorted(set(os.listdir(scratch / "drizzle")) - before)
+        if added:
+            return Result(name, FAIL, f"schema.ts changed without a migration (run `npm run db:generate`): {added}")
+        return Result(name, PASS)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
 def check_web() -> list[Result]:
     web = ROOT / "apps" / "web"
     if not (web / "node_modules").is_dir():
@@ -228,7 +252,10 @@ def check_web() -> list[Result]:
     return [
         command_check("web: tsc --noEmit", ["npm", "run", "--silent", "typecheck"], cwd=web),
         command_check("web: eslint", ["npm", "run", "--silent", "lint"], cwd=web),
-        command_check("web: vitest", ["npm", "test", "--silent"], cwd=web),
+        command_check("web: vitest unit", ["npm", "test", "--silent"], cwd=web),
+        check_schema_drift(web),
+        # Throwaway database: clean migration, CRUD/constraints, seeds, role permissions (Phase 01).
+        command_check("web: db integration", ["npm", "run", "--silent", "test:db"], cwd=web),
     ]
 
 

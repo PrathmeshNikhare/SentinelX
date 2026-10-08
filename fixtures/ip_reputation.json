@@ -1,0 +1,15 @@
+{
+  "source": "sentinelx-synthetic-v1",
+  "note": "Synthetic reputation data. Public addresses use RFC 5737 documentation ranges only; internal addresses use RFC 1918.",
+  "entries": [
+    { "ip": "10.10.1.20", "reputation": "known_good", "score": 0, "tags": ["corporate", "admin-workstation"] },
+    { "ip": "10.10.1.21", "reputation": "known_good", "score": 0, "tags": ["corporate", "jump-host"] },
+    { "ip": "10.10.2.50", "reputation": "known_good", "score": 5, "tags": ["corporate", "vpn-pool"] },
+    { "ip": "192.0.2.10", "reputation": "unknown", "score": 20, "tags": ["residential"] },
+    { "ip": "192.0.2.44", "reputation": "unknown", "score": 25, "tags": ["mobile-carrier"] },
+    { "ip": "198.51.100.77", "reputation": "suspicious", "score": 55, "tags": ["hosting-provider", "first-seen"] },
+    { "ip": "198.51.100.120", "reputation": "suspicious", "score": 65, "tags": ["anonymizing-vpn"] },
+    { "ip": "203.0.113.45", "reputation": "malicious", "score": 90, "tags": ["brute-force-source", "botnet"] },
+    { "ip": "203.0.113.99", "reputation": "malicious", "score": 95, "tags": ["tor-exit", "credential-stuffing"] }
+  ]
+}

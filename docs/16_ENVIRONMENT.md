@@ -33,7 +33,7 @@ Copy-Item .env.example .env
 
 docker compose up -d
 
-Push-Location apps\web; npm ci; Pop-Location
+Push-Location apps\web; npm ci; npm run db:migrate; npm run db:seed; Pop-Location
 
 foreach ($s in 'detection','ai') {
   Push-Location "services\$s"
@@ -52,7 +52,7 @@ cp .env.example .env
 
 docker compose up -d
 
-(cd apps/web && npm ci)
+(cd apps/web && npm ci && npm run db:migrate && npm run db:seed)
 
 for s in detection ai; do
   (cd "services/$s" && python3.12 -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt)
@@ -65,6 +65,9 @@ Optional before Phase 06: `ollama pull llama3.2:3b` (the model choice is confirm
 
 ## Verification
 `python scripts/verify.py` prints `[PASS]`, `[FAIL]` or `[WARN]` per check and exits non-zero on any FAIL. With the Compose stack stopped, the infrastructure checks FAIL by design.
+
+## Database
+`npm run db:migrate` and `npm run db:seed` (in `apps/web`) connect with `DATABASE_URL` from the repo-root `.env` as the owner role. Both are idempotent. After editing `src/db/schema.ts`, run `npm run db:generate` and commit the new file in `apps/web/drizzle/`; `verify.py` fails on schema drift. `npm run test:db` creates and drops its own `sentinelx_test_*` database.
 
 ## Troubleshooting
 - `docker compose` errors with `set POSTGRES_USER in .env`: copy `.env.example` to `.env`.
