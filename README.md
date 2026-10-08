@@ -9,8 +9,8 @@ This is the implementation harness for SentinelX.
 - `docs/` — authoritative requirements, architecture, security and phases.
 - `progress/` — persistent project state and handoffs.
 
-## Install
-Copy these files into the root of your SentinelX repository and open Claude Code there.
+## Repository
+This directory is the SentinelX repository (D-008). Open Claude Code here.
 
 ## First command
 ```text
@@ -19,7 +19,7 @@ Copy these files into the root of your SentinelX repository and open Claude Code
 
 Do not ask Claude to build the whole project at once. Implement one phase at a time: `00 -> 01 -> ... -> 14`.
 
-At the end of each phase use `/verify-phase` and `/handoff`.
+At the end of each phase use `/verify-phase`, then `/handoff` only if it returns APPROVED (`docs/18_HANDOFF_PROTOCOL.md`).
 
 At a new session use `/resume`.
 

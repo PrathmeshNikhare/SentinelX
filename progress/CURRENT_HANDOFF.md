@@ -1,5 +1,7 @@
 # Current Handoff
 
-STATUS: NONE
+Pointer to the latest phase handoff. Updated by `/handoff` (see `docs/18_HANDOFF_PROTOCOL.md`).
 
-No phase has been completed yet.
+LATEST_HANDOFF: NONE
+PHASE: —
+STATUS: —

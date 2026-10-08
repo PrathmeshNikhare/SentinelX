@@ -12,13 +12,14 @@ Before changing code:
 1. Read this file.
 2. Read `progress/STATUS.md`.
 3. Read `progress/DECISIONS.md`.
-4. Read `docs/07_PHASES.md`.
-5. Read the latest file in `progress/handoffs/` if one exists.
-6. Inspect the actual repository and git status.
-7. Run the relevant existing tests before modifying behavior.
+4. Read `progress/PHASE_LOG.md`.
+5. Read `docs/07_PHASES.md`.
+6. Read the handoff named in `progress/CURRENT_HANDOFF.md` if one exists.
+7. Inspect the actual repository and git status.
+8. Run the relevant existing tests before modifying behavior.
 
 ## Non-negotiable architecture
-Browser -> Next.js App Router -> PostgreSQL / Kafka -> Detection Worker -> FastAPI AI/ML -> LangGraph -> typed read-only LangChain tools -> Qdrant -> Ollama -> structured validated verdict -> investigation trace -> Next.js incident UI.
+Browser -> Next.js App Router -> PostgreSQL / Kafka -> Detection Worker (rules, Isolation Forest, risk, correlation) -> incidents -> FastAPI AI service -> LangGraph -> typed read-only LangChain tools -> Qdrant -> Ollama -> structured validated verdict -> investigation trace -> Next.js incident UI.
 
 Technology:
 - Next.js App Router + TypeScript
@@ -108,10 +109,10 @@ Receiving agent procedure:
 2. inspect git status/diff;
 3. run claimed verification;
 4. inspect key files;
-5. accept or reject;
+5. accept (previous phase -> `COMPLETE`) or reject (`REJECTED`);
 6. only then start new work.
 
-Use `READY_FOR_NEXT_PHASE` or `REJECTED`.
+Phase statuses, gate verdicts and their order are defined in `docs/18_HANDOFF_PROTOCOL.md`.
 
 ## Session resume
 A new Claude session reconstructs state from repository files. Read `CLAUDE.md`, `STATUS.md`, `DECISIONS.md`, `PHASE_LOG.md`, latest handoff, and actual repository state. Never ask the user to re-explain the project if these files exist.

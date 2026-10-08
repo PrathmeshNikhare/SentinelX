@@ -10,10 +10,10 @@ BLOCKERS: NONE
 Start Phase 00 — Foundation.
 
 ## Last completed work
-None.
+2026-10-08 pre-flight (not a phase): git repository initialized in this directory (baseline commit `fbf08f9`), `.gitignore`/`.gitattributes` added, decisions D-008–D-027 recorded, harness inconsistencies fixed, Phase 00 exit criteria made verifiable.
 
 ## Next action
-Run `/start-phase 00`.
+After user approval of the pre-flight, run `/start-phase 00`.
 
 ## Verification
 Not yet run.

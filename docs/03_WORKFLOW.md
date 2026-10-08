@@ -4,7 +4,7 @@
 1. Submit event.
 2. Validate and normalize.
 3. Publish to Kafka.
-4. Detection worker consumes.
+4. Detection worker consumes and persists the event idempotently on `external_event_id` (D-014).
 5. Evaluate deterministic rules.
 6. Extract ML features.
 7. Run Isolation Forest.
@@ -16,14 +16,14 @@
 
 ## Investigation
 1. Analyst opens incident.
-2. Starts investigation.
+2. Starts investigation; API returns `202` with `investigation_run_id` and the UI polls for status (D-015).
 3. LangGraph loads incident.
 4. Evaluates evidence.
 5. Chooses bounded tool action.
 6. Tool executes.
 7. Result becomes evidence.
 8. Graph decides whether more evidence is needed.
-9. Retrieve security knowledge/MITRE.
+9. Retrieve security knowledge/MITRE through tools; results are stored as evidence (D-018).
 10. Ollama produces structured verdict.
 11. Validate schema and evidence references.
 12. Invalid/unsupported result becomes `requires_review=true`.

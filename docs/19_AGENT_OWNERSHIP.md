@@ -18,4 +18,4 @@ Test Engineer: cross-service and E2E tests.
 
 Reviewer: adversarial phase gate.
 
-Shared files such as Docker Compose, API contracts, root README, CI and phase docs require review when they affect another ownership boundary.
+Shared files such as Docker Compose, `contracts/`, `scripts/verify.py`, root README and phase docs require review when they affect another ownership boundary.

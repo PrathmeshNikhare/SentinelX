@@ -1,3 +1,3 @@
 # Handoff Directory
 
-Create one file per completed phase: `phase-00.md`, `phase-01.md`, etc. Only create a phase handoff after verification.
+One file per phase: `phase-00.md`, `phase-01.md`, etc. Write it with `/handoff` only after `/verify-phase` returns APPROVED, then point `progress/CURRENT_HANDOFF.md` at it. See `docs/18_HANDOFF_PROTOCOL.md`.
