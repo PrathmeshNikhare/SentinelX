@@ -43,3 +43,6 @@ Thumbs.db
 .windsurf/
 _trial_temp/
 .claude/settings.local.json
+
+# Locally trained detection model artifacts (D-049)
+services/detection/models/

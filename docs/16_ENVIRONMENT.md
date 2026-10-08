@@ -47,6 +47,7 @@ foreach ($s in 'detection','ai') {
   .venv\Scripts\python -m pip install -r requirements-dev.txt
   Pop-Location
 }
+services\detection\.venv\Scripts\python -m sentinelx_detection.train   # run from services\detection
 
 python scripts\verify.py
 ```
@@ -64,6 +65,7 @@ docker compose up -d
 for s in detection ai; do
   (cd "services/$s" && python3.12 -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt)
 done
+(cd services/detection && .venv/bin/python -m sentinelx_detection.train)
 
 python3 scripts/verify.py
 ```
@@ -83,7 +85,10 @@ Optional before Phase 06: `ollama pull llama3.2:3b` (the model choice is confirm
 2. Start the app (`npm run dev` or `npm run build && npm run start`).
 3. Send a scenario: `npm run demo:send -- A` (or `B`/`C`); add `--url http://localhost:3005` for another port and `--base 2026-01-01T10:00:00Z` for a fixed timeline. Each event is posted to `POST /api/events` and lands on Kafka topic `security-events`.
 
-Events are not stored or shown in the UI until the detection worker exists (Phases 04–05). Optional `KAFKA_EVENTS_TOPIC` overrides the topic (tests use their own, D-045).
+Events reach PostgreSQL (and the console's Events page) once the detection worker runs; alerts and incidents follow in Phase 05. Optional `KAFKA_EVENTS_TOPIC` overrides the topic (tests use their own, D-045).
+
+## Detection worker (Phase 04)
+In `services/detection`, train the model once (`python -m sentinelx_detection.train`; deterministic, about 3 s), then run `python -m sentinelx_detection.worker`. Use `--idle-exit 15` to process the backlog and exit. It consumes `security-events`, stores events and detection signals as `sentinelx_app`, and logs one JSON line per event with signals, anomaly, risk and the alert decision. See `services/detection/README.md`.
 
 ## Database
 `npm run db:migrate` and `npm run db:seed` (in `apps/web`) connect with `DATABASE_URL` from the repo-root `.env` as the owner role. Both are idempotent. After editing `src/db/schema.ts`, run `npm run db:generate` and commit the new file in `apps/web/drizzle/`; `verify.py` fails on schema drift. `npm run test:kafka` produces and consumes on the isolated `security-events-test` topic; `npm run test:db` creates and drops its own `sentinelx_test_*` database; `npm run test:e2e` does the same with `sentinelx_e2e`. `npm run db:roles` enables LOGIN for `sentinelx_app` with the password in `APP_DATABASE_URL`.

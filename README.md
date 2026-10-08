@@ -4,7 +4,7 @@ AI-assisted security-log analysis and evidence-based threat investigation. A por
 
 ## Layout
 - `apps/web/` — Next.js console (Phase 02: auth, navigation, incident/event views, API); Drizzle schema, migrations and seeds (Phase 01).
-- `services/detection/` — Python detection worker (Phase 03+).
+- `services/detection/` — Python detection worker: rules, Isolation Forest, risk engine (Phase 04).
 - `services/ai/` — Python FastAPI AI service (Phase 06+).
 - `contracts/v1/` — versioned cross-service JSON Schemas.
 - `fixtures/` — deterministic synthetic data.
@@ -24,6 +24,7 @@ docker compose up -d
 python scripts/verify.py
 (cd apps/web && npm run dev)       # http://localhost:3000
 (cd apps/web && npm run demo:send -- A)   # needs INGEST_API_TOKEN in .env (docs/16)
+(cd services/detection && .venv/bin/python -m sentinelx_detection.train && .venv/bin/python -m sentinelx_detection.worker)
 ```
 
 ## Working with the harness

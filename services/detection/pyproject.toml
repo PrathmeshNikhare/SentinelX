@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 
 [tool.ruff]
 target-version = "py312"
-line-length = 110
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S"]
@@ -19,6 +19,12 @@ python_version = "3.12"
 strict = true
 files = ["sentinelx_detection", "tests"]
 
+# Libraries without bundled type information.
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "joblib", "confluent_kafka", "confluent_kafka.*", "jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["integration: needs the Compose PostgreSQL and Kafka plus Node (runs Drizzle migrations)"]

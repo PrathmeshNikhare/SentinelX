@@ -234,12 +234,89 @@ Kafka message on topic `security-events`: key `user_id` (D-014), JSON value = th
 - The Kafka integration tests publish to `security-events-test` and the E2E servers to `security-events-e2e`; both topics are created on demand by `ensureTopic`.
 - Only real ingestion (including `npm run demo:send`) reaches `security-events`, so the Phase 04 worker never consumes test noise. Kafka has no volume (D-023): recreating the broker container empties every topic.
 
+### D-046 — Phase 04 scope: the worker persists events and signals; alerts and incidents are Phase 05 (Phase 04)
+The detection worker (`python -m sentinelx_detection.worker`):
+1. consumes `security-events`;
+2. validates each message against `contracts/v1/normalized-event.schema.json`;
+3. upserts `security_events` (replay-safe: an existing `external_event_id` returns its row id);
+4. computes rules, features, anomaly score and risk;
+5. inserts `detection_signals` with `ON CONFLICT (event_id, rule_name) DO NOTHING`.
+
+Alert persistence (risk ≥ threshold, D-050) and correlation into incidents are Phase 05 scope (docs/07). Processing uses event time only, never wall-clock time, so re-consuming the topic reproduces the same results. Phase 05 adds alerts by replaying from the beginning (new consumer group or offset reset).
+
+### D-047 — Python detection stack (Phase 04; resolves the consumer/DB questions in the Phase 03 handoff)
+- Pins: `confluent-kafka` 2.15.1 (librdkafka, mirroring D-040; `broker.address.family=v4`), `psycopg[binary]` 3.3.6 (D-010), `numpy` 2.5.3, `scikit-learn` 1.9.1, and `jsonschema` 4.26.0, which validates against the generated contracts so Python never re-declares the event shape (D-042). Transitive dependencies are frozen in `requirements.txt`.
+- `pandas` is not added: nothing in Phase 04 needs it. The stack permits it if a later phase does.
+- Delivery: `enable.auto.commit=false`; the offset is committed after an event is fully processed (at-least-once, with idempotent writes).
+  - A malformed or contract-invalid message is logged (no payload) and committed, i.e. skipped: a poison message must not block the partition.
+  - A database or broker error is not committed: the worker backs off and retries the same message, so no event is lost.
+- The worker connects as `sentinelx_app` through `APP_DATABASE_URL` (D-035 already assigns that role to web + detection). Consumer group: `sentinelx-detection`.
+
+### D-048 — Deterministic detection rules (Phase 04)
+All rules are evaluated at the event's `occurred_at` against PostgreSQL history strictly before it. Rule severity derives from the score using the risk bands (D-050). Login = `event_type=authentication, action=login`.
+
+| Rule | Fires when | Score |
+|---|---|---|
+| `brute_force_attempts` | failed login and ≥5 failed logins for the user in the last 10 min (including this one) | 60 |
+| `login_after_failures` | successful login after ≥3 failed logins for the user in the previous 15 min | 75 |
+| `new_ip_login` | successful login from an IP with no successful login by the user in the previous 30 days (failed attempts do not make an IP known), unless the IP is `known_good` | 35 |
+| `risky_ip_login` | successful login from a `suspicious` / `malicious` IP (`ip_reputation`) | 50 / 80 |
+| `suspicious_powershell` | `powershell.exe`/`pwsh.exe` process whose command line has encoded-command, hidden-window, `iex`/`invoke-expression`, `downloadstring`/`net.webclient` or `frombase64string` indicators | 70 (one indicator), 85 (two or more) |
+| `sensitive_file_access` | file access with `metadata.sensitivity` in confidential/restricted/secret, or a path naming payroll/salary/finance/hr/credential/password/secret | 50 |
+| `privilege_escalation` | successful `privilege_change` event | 70 |
+| `impossible_travel` | successful login whose `metadata.geo.country` differs from a successful login by the user in the previous 2 h (fixtures without `geo` never fire it, D-020) | 75 |
+| `post_compromise_chain` | process or file-access event within 30 min after a `login_after_failures` or malicious `risky_ip_login` signal for the user | 85 |
+
+### D-049 — Features and Isolation Forest (Phase 04; resolves the open Phase 04 feature decision)
+Feature vector, in a fixed order (event time):
+1. hour-of-day sine and cosine (UTC);
+2. is_weekend;
+3. is_failure;
+4. one-hot `event_type` (5);
+5. failed logins for the user in 15 min;
+6. user events in 1 h;
+7. distinct user IPs in 24 h (counts include the current event, capped at 50);
+8. is_new_ip_for_user (no successful login from it in 30 days);
+9. IP reputation score / 100 (0.25 when the IP is not in `ip_reputation`);
+10. is_sensitive_resource;
+11. is_script_process.
+
+Training: `python -m sentinelx_detection.train` generates a seeded synthetic baseline (40 users, 21 days of business-hour sessions from corporate IPs, normal file and admin activity), replays it through the same feature code, and fits `IsolationForest(n_estimators=200, max_samples=256, contamination="auto", random_state=42)`.
+
+Output: `services/detection/models/iforest-v1.joblib` plus a JSON metadata file. The model version is content-addressed: a SHA-256 over the training matrix, feature list, parameters and sklearn version.
+
+Anomaly score = `1 / (1 + exp(12 · decision_function))`, in [0, 1] with 0.5 at sklearn's outlier boundary.
+
+The artifact is not committed: training is deterministic, and the worker fails fast with instructions if the file is missing. `joblib.load` unpickles, so only locally trained artifacts are ever loaded, never downloaded ones.
+
+### D-050 — Deterministic risk engine and alert threshold (Phase 04; resolves the open Phase 04 threshold decision)
+Inputs:
+- R = the highest rule score on the event;
+- A = 100 × anomaly score;
+- P = IP reputation score (25 when unknown);
+- C = min(100, 25 × distinct rule names fired for the user in the last 60 min, including this event): the correlation/context term.
+
+`risk = clamp(round(0.45·R + 0.25·A + 0.15·P + 0.15·C), 0, 100)`. Levels: LOW 0–29, MEDIUM 30–59, HIGH 60–79, CRITICAL 80–100 (docs/01).
+
+Alert threshold: risk ≥ 40 (Phase 05 persists alerts). The scenario traces behind the numbers:
+- B (`known_good` IP, no rules) is capped at 0.25·A ≤ 25: never alerts.
+- C's first login (`risky_ip_login` 50 + `new_ip_login`, P = 55, C = 50) is ≥ 38.25 + 0.25·A, so it alerts as MEDIUM, enabling the docs/12 "cautious verdict" investigation.
+- A reaches ≈ 85–90 at the PowerShell/file events (R = 85, C = 100, P = 90), matching docs/03's "risk ~90".
+
+The LLM never computes or overrides this score (D-004).
+
+### D-051 — psycopg prefers IPv4 for `localhost` and is time-bounded (Phase 04)
+On Windows, psycopg tried `localhost` as `::1` first and stalled until its timeout before falling back to IPv4: 90 s versus 0.07 s via `127.0.0.1`, because Docker publishes PostgreSQL on 127.0.0.1 only. This made the worker look hung. Node's `pg` is unaffected.
+- `sentinelx_detection.repository.connect()` passes `hostaddr=127.0.0.1` when the URL host is `localhost`, the client-side equivalent of `broker.address.family=v4` for Kafka (D-040).
+- It always sets `connect_timeout=10` (psycopg's default is unbounded), so a misconfigured host fails fast instead of hanging.
+- No `.env` change is needed; the protected `.env` is not touched.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|
 | ~~Auth/session implementation and password hashing algorithm~~ — resolved by D-034 | 02 |
 | ~~TypeScript Kafka client~~ — resolved by D-040 | 03 |
-| Isolation Forest feature list and alert threshold | 04 |
+| ~~Isolation Forest feature list and alert threshold~~ — resolved by D-049, D-050 | 04 |
 | Correlation window and grouping keys | 05 |
 | Ollama model confirmation (`llama3.2:3b` default) and structured-output mode | 06 |
 | Embedding model and vector dimension (default candidate `all-MiniLM-L6-v2`, 384-d, CPU torch) | 09 |
