@@ -10,6 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS_DIR = REPO_ROOT / "contracts" / "v1"
 MIN_TOKEN_LENGTH = 32
 DEFAULT_TIMEOUT_SECONDS = 120.0  # measured cold call: 40.5 s, of which 11 s model load (D-056)
+# langsmith (a langchain-core dependency) uploads traces to a cloud service when any of these is "true" (D-060).
+TRACING_VARIABLES = ("LANGSMITH_TRACING", "LANGSMITH_TRACING_V2", "LANGCHAIN_TRACING", "LANGCHAIN_TRACING_V2")
 
 
 class ConfigError(RuntimeError):
@@ -34,6 +36,12 @@ def validate_service_token(token: str) -> None:
         )
 
 
+def refuse_cloud_tracing() -> None:
+    enabled = [name for name in TRACING_VARIABLES if os.environ.get(name, "").strip().lower() == "true"]
+    if enabled:
+        raise ConfigError(f"{', '.join(enabled)} would send investigation data to LangSmith; unset it (D-060)")
+
+
 @dataclass(frozen=True)
 class Settings:
     service_token: str
@@ -44,6 +52,7 @@ class Settings:
     @staticmethod
     def from_env() -> Settings:
         load_root_env()
+        refuse_cloud_tracing()
         token = os.environ.get("AI_SERVICE_TOKEN", "")
         validate_service_token(token)
         timeout_text = os.environ.get("OLLAMA_TIMEOUT_SECONDS") or str(DEFAULT_TIMEOUT_SECONDS)

@@ -95,10 +95,12 @@ In `services/detection`, train the model once (`python -m sentinelx_detection.tr
 2. Make sure Ollama is running with `OLLAMA_MODEL` pulled (`ollama pull llama3.2:3b`).
 3. In `services/ai`, run `python -m sentinelx_ai`; it serves on `127.0.0.1:8000`.
 
+The agent tools (Phase 07) need `AI_TOOLS_DATABASE_URL` and `npm run db:roles`. Their integration tests create and drop their own `sentinelx_ai_tools_test_*` database. Leave `LANGSMITH_TRACING`/`LANGCHAIN_TRACING_V2` unset: the service refuses to start when they are `true` (D-060).
+
 The first generation after Ollama loads the model took about 40 s on the reference machine, and warm calls about 5–7 s. See `services/ai/README.md`.
 
 ## Database
-`npm run db:migrate` and `npm run db:seed` (in `apps/web`) connect with `DATABASE_URL` from the repo-root `.env` as the owner role. Both are idempotent. After editing `src/db/schema.ts`, run `npm run db:generate` and commit the new file in `apps/web/drizzle/`; `verify.py` fails on schema drift. `npm run test:kafka` produces and consumes on the isolated `security-events-test` topic; `npm run test:db` creates and drops its own `sentinelx_test_*` database; `npm run test:e2e` does the same with `sentinelx_e2e`. `npm run db:roles` enables LOGIN for `sentinelx_app` with the password in `APP_DATABASE_URL`.
+`npm run db:migrate` and `npm run db:seed` (in `apps/web`) connect with `DATABASE_URL` from the repo-root `.env` as the owner role. Both are idempotent. After editing `src/db/schema.ts`, run `npm run db:generate` and commit the new file in `apps/web/drizzle/`; `verify.py` fails on schema drift. `npm run test:kafka` produces and consumes on the isolated `security-events-test` topic; `npm run test:db` creates and drops its own `sentinelx_test_*` database; `npm run test:e2e` does the same with `sentinelx_e2e`. `npm run db:roles` enables LOGIN for `sentinelx_app` and `sentinelx_ai_tools` with the passwords in `APP_DATABASE_URL` and `AI_TOOLS_DATABASE_URL` (D-061). Add `AI_TOOLS_DATABASE_URL` from `.env.example` to an existing `.env` before running it.
 
 ## Troubleshooting
 - `docker compose` errors with `set POSTGRES_USER in .env`: copy `.env.example` to `.env`.

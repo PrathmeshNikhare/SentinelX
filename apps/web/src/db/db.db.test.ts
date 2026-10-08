@@ -316,14 +316,11 @@ describe("role permissions", () => {
     expect(await asRole("sentinelx_ai_writer", insertEvidence())).toBeNull();
   });
 
-  it("AI roles cannot log in until Phases 06-07 enable them (sentinelx_app may, via db:roles)", async () => {
-    const result = await db.execute<{ rolname: string; rolcanlogin: boolean }>(
-      sql`SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname LIKE 'sentinelx\\_ai\\_%' ORDER BY rolname`,
+  it("sentinelx_ai_writer cannot log in until Phase 08 enables it (app and tools roles may, via db:roles)", async () => {
+    const result = await db.execute<{ rolcanlogin: boolean }>(
+      sql`SELECT rolcanlogin FROM pg_roles WHERE rolname = 'sentinelx_ai_writer'`,
     );
-    expect(result.rows).toEqual([
-      { rolname: "sentinelx_ai_tools", rolcanlogin: false },
-      { rolname: "sentinelx_ai_writer", rolcanlogin: false },
-    ]);
+    expect(result.rows).toEqual([{ rolcanlogin: false }]);
   });
 });
 

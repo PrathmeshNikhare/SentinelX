@@ -379,6 +379,32 @@ Verdict rules (CLAUDE.md shape, extra fields forbidden):
 
 Whether the cited IDs actually exist is checked in Phase 10.
 
+### D-060 — Agent tools on LangChain `StructuredTool` (Phase 07)
+- Pins: `langchain-core` 1.6.7 and `psycopg[binary]` 3.3.6 (as detection, D-047). 1.6.8 and 1.6.9 were released the day before Phase 07 and were skipped (as in D-033). LangGraph 1.2.x (Phase 08) requires `langchain-core>=1.4.7`. OSV reported no advisories for the 52 frozen packages.
+- Why LangChain here: the stack names LangChain tools for the agent. Each tool is a `StructuredTool` whose `args_schema` is a Pydantic model, so Phase 08's graph can validate an LLM's proposed action against the same schema (D-017) and render the tool list for the prompt. The Ollama adapter in `llm.py` stays the only LLM path; `langchain-ollama` is not added.
+- `langsmith` arrives as a `langchain-core` dependency and uploads traces to a cloud service when `LANGSMITH_TRACING`/`LANGCHAIN_TRACING_V2` (or the older names) is `true`. That would send investigation data off the machine, so the service refuses to start when any of them is set (D-025 style).
+
+### D-061 — The tools connect only as `sentinelx_ai_tools` (Phase 07; refines D-031)
+- `npm run db:roles` (owner) now enables LOGIN for both `sentinelx_app` and `sentinelx_ai_tools`, each with the password from its URL (`APP_DATABASE_URL`, `AI_TOOLS_DATABASE_URL`). `sentinelx_ai_writer` stays NOLOGIN until Phase 08.
+- `connect_tools()` checks `current_user` after connecting and refuses any other role. Even a misconfigured URL with owner credentials cannot run the tools.
+- Sessions set `default_transaction_read_only=on`, `statement_timeout=2000ms` and `TimeZone=UTC`, use `connect_timeout=10` and IPv4 for `localhost` (D-051), and run in autocommit with one short-lived connection per call. The grants are the enforcement; the read-only default is defense in depth. Tests prove the grants in an explicit `READ WRITE` transaction.
+
+### D-062 — Tool bounds (Phase 07)
+| Tool | Input bounds | Output |
+|---|---|---|
+| `get_user_history` | `user_id` (event-contract pattern), aware `start_time < end_time`, window ≤ 7 days, `limit` 1–50 (default 20) | events newest first, `truncated` |
+| `get_related_logs` | as above, but `user_id` and/or `source_ip` (at least one, so it is never an unscoped scan); `event_types` 1–5 unique contract values | same |
+| `get_ip_reputation` | `ip` (IPv4/IPv6, no CIDR) | `known=false`, `reputation=unknown` for unseeded addresses |
+| `get_mitre_technique` | `T####(.###)` | `found=false` for IDs outside the curated set |
+| `search_security_knowledge` | `query` 3–500 characters, no control characters; `top_k` 1–10 (default 5) | hits with `kd_` document IDs, `truncated` |
+- Inputs forbid unknown fields. Every result is at most 32 KiB serialized: event and hit lists drop trailing items and set `truncated`; any other oversized result is a `ToolError` (`oversized`).
+- Event rows carry `event_id` (the `se_` row ID) so Phase 08 evidence can reference persisted rows.
+- Failures are `ToolError(tool, code)` with code `timeout`, `unavailable` or `oversized`. The message never includes SQL, parameters or row data.
+- Queries are three module constants, each a single `SELECT` with named parameters. Optional filters use `%(x)s IS NULL OR …`, not string building. A unit test parses the module and fails on imports outside the allowed set (no `subprocess`/`os`/`socket`/HTTP clients), on calls to `eval`/`exec`/`open`, and on any `execute()` whose query is not a constant.
+
+### D-063 — Knowledge retriever interface (Phase 07; implements D-026)
+`KnowledgeRetriever.search(query, top_k, timeout_seconds) -> Sequence[KnowledgeHit]`. Implementations honor the 5 s timeout and raise `TimeoutError` or `ConnectionError`, which the tool maps to `ToolError`. `KnowledgeHit` carries `document_id` (`kd_` + 16 hex, i.e. `knowledge_documents.id`, D-018), `source`, `title` (≤ 300), `snippet` (≤ 1500) and a finite `score`. Phase 07 tests use a fake. Phase 09 supplies the Qdrant implementation and decides whether hits must be checked against `knowledge_documents`.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|

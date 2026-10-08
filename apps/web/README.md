@@ -29,7 +29,7 @@ npm run test:e2e       # next build + Playwright (ports 3100/3101, throwaway sen
 npm run db:generate    # new migration after editing src/db/schema.ts (commit it)
 npm run db:migrate     # apply migrations (owner DATABASE_URL)
 npm run db:seed        # sync reference data from fixtures/
-npm run db:roles       # enable LOGIN for sentinelx_app with the APP_DATABASE_URL password
+npm run db:roles       # enable LOGIN for sentinelx_app and sentinelx_ai_tools (APP_/AI_TOOLS_DATABASE_URL passwords)
 ANALYST_PASSWORD=... npm run analyst:create -- <email> "<name>"
 
 npm run contracts:generate   # regenerate contracts/v1/*.schema.json after editing src/contracts/

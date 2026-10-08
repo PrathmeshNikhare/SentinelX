@@ -1,4 +1,4 @@
-// Owner-only administration: enabling the web role's login (D-035) and creating analyst accounts (D-034).
+// Owner-only administration: enabling role logins (D-035, D-061) and creating analyst accounts (D-034).
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { hashPassword, passwordPolicyError } from "../server/auth/password.ts";
@@ -6,23 +6,27 @@ import { normalizeEmail } from "../server/auth/session-store.ts";
 import { analysts } from "./schema.ts";
 
 export const APP_ROLE = "sentinelx_app";
+export const AI_TOOLS_ROLE = "sentinelx_ai_tools";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Enables LOGIN for sentinelx_app with the password embedded in APP_DATABASE_URL. */
-export async function enableAppRoleLogin(ownerUrl: string, appUrl: string): Promise<void> {
-  const parsed = new URL(appUrl);
+/** Enables LOGIN for `role` with the password embedded in `roleUrl` (APP_DATABASE_URL, AI_TOOLS_DATABASE_URL). */
+export async function enableRoleLogin(ownerUrl: string, roleUrl: string, role: string): Promise<void> {
+  const parsed = new URL(roleUrl);
   const user = decodeURIComponent(parsed.username);
   const password = decodeURIComponent(parsed.password);
-  if (user !== APP_ROLE) throw new Error(`APP_DATABASE_URL must connect as ${APP_ROLE}, not "${user}"`);
-  if (password.length < 8) throw new Error("APP_DATABASE_URL must include a password of at least 8 characters");
+  if (user !== role) throw new Error(`the ${role} connection string must connect as ${role}, not "${user}"`);
+  if (password.length < 8) throw new Error(`the ${role} connection string must include a password of at least 8 characters`);
   const client = new pg.Client({ connectionString: ownerUrl });
   await client.connect();
   try {
-    await client.query(`ALTER ROLE ${APP_ROLE} WITH LOGIN PASSWORD ${client.escapeLiteral(password)}`);
+    await client.query(`ALTER ROLE ${client.escapeIdentifier(role)} WITH LOGIN PASSWORD ${client.escapeLiteral(password)}`);
   } finally {
     await client.end();
   }
 }
+
+export const enableAppRoleLogin = (ownerUrl: string, appUrl: string): Promise<void> =>
+  enableRoleLogin(ownerUrl, appUrl, APP_ROLE);
 
 export async function createAnalyst(
   db: NodePgDatabase,

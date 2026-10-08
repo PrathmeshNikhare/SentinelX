@@ -20,3 +20,5 @@ Input: query, top_k (bounded). Retrieve from Qdrant through a retriever interfac
 Forbidden tool capabilities: raw SQL, filesystem access, shell execution, arbitrary HTTP, arbitrary Python, mutation actions.
 
 Every tool requires input/output schemas, timeout, maximum result size, read-only declaration and tests.
+
+Implementation (Phase 07): `services/ai/sentinelx_ai/tools.py`. `build_tools(ToolDatabase(AI_TOOLS_DATABASE_URL), retriever)` returns exactly these five LangChain `StructuredTool`s with `metadata.read_only = true` (D-060). The tools connect only as `sentinelx_ai_tools` in read-only, 2-second statement-timeout sessions (D-061). Bounds: window ≤ 7 days, limit ≤ 50, `top_k` ≤ 10, results ≤ 32 KiB (D-062). The retriever contract is in D-063.

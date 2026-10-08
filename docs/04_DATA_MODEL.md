@@ -23,13 +23,13 @@ Core tables:
 Foreign keys connect every child to its parent; no cascading deletes (audit data is preserved). Indexes: `security_events` (occurred_at), (user_id, occurred_at), (source_ip, occurred_at); `incidents` (status, updated_at); `detection_signals`/`alerts` via their unique keys; link tables on the second column; `investigation_runs` (incident_id); `evidence` (investigation_run_id); `knowledge_documents` (content_hash). JSON only for genuinely flexible metadata.
 
 ## Database roles (D-022, D-031)
-AI roles are NOLOGIN until Phases 06–07; `sentinelx_app` gets LOGIN in Phase 02. No role has DELETE, TRUNCATE or CREATE.
+`sentinelx_app` gets LOGIN in Phase 02 and `sentinelx_ai_tools` in Phase 07, both via `npm run db:roles` (D-061). `sentinelx_ai_writer` stays NOLOGIN until Phase 08. No role has DELETE, TRUNCATE or CREATE.
 
 | Role | SELECT | INSERT/UPDATE |
 |---|---|---|
 | owner (`POSTGRES_USER`) | all; runs migrations and seeds | all |
 | `sentinelx_app` (web + detection; LOGIN via `npm run db:roles`, D-035) | all tables | analysts, analyst_sessions, security_events, detection_signals, alerts, incidents, incident_events, incident_alerts |
-| `sentinelx_ai_tools` | security_events, detection_signals, alerts, incidents, incident links, knowledge_documents, ip_reputation, mitre_techniques | none |
+| `sentinelx_ai_tools` (agent tools; LOGIN via `npm run db:roles`, D-061) | security_events, detection_signals, alerts, incidents, incident links, knowledge_documents, ip_reputation, mitre_techniques | none |
 | `sentinelx_ai_writer` | pipeline tables + investigation_runs, investigation_trace, evidence | INSERT/UPDATE investigation_runs; INSERT only investigation_trace, evidence |
 
 Reference data (`ip_reputation`, `mitre_techniques`, `knowledge_documents`) is written by the owner through seed/ingestion scripts.
