@@ -1,0 +1,64 @@
+"""AI service settings (D-056, D-058). The single .env lives at the repo root; existing variables take precedence."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+CONTRACTS_DIR = REPO_ROOT / "contracts" / "v1"
+MIN_TOKEN_LENGTH = 32
+DEFAULT_TIMEOUT_SECONDS = 120.0  # measured cold call: 40.5 s, of which 11 s model load (D-056)
+
+
+class ConfigError(RuntimeError):
+    """Refuse to start rather than run with an unsafe or incomplete configuration (D-025)."""
+
+
+def load_root_env(path: Path = REPO_ROOT / ".env") -> None:
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip())
+
+
+def validate_service_token(token: str) -> None:
+    if len(token) < MIN_TOKEN_LENGTH or "replace-me" in token.lower() or len(set(token)) < 8:
+        raise ConfigError(
+            f"AI_SERVICE_TOKEN must be a random value of at least {MIN_TOKEN_LENGTH} characters "
+            '(generate: python -c "import secrets; print(secrets.token_urlsafe(32))")'
+        )
+
+
+@dataclass(frozen=True)
+class Settings:
+    service_token: str
+    ollama_base_url: str
+    ollama_model: str
+    ollama_timeout_seconds: float
+
+    @staticmethod
+    def from_env() -> Settings:
+        load_root_env()
+        token = os.environ.get("AI_SERVICE_TOKEN", "")
+        validate_service_token(token)
+        timeout_text = os.environ.get("OLLAMA_TIMEOUT_SECONDS") or str(DEFAULT_TIMEOUT_SECONDS)
+        try:
+            timeout = float(timeout_text)
+        except ValueError as error:
+            raise ConfigError("OLLAMA_TIMEOUT_SECONDS must be a number") from error
+        if not 1 <= timeout <= 600:
+            raise ConfigError("OLLAMA_TIMEOUT_SECONDS must be between 1 and 600")
+        model = os.environ.get("OLLAMA_MODEL", "")
+        if not model:
+            raise ConfigError("OLLAMA_MODEL is not set (copy .env.example to .env at the repo root)")
+        return Settings(
+            service_token=token,
+            ollama_base_url=os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434",
+            ollama_model=model,
+            ollama_timeout_seconds=timeout,
+        )

@@ -35,4 +35,15 @@ All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error
 - Effect: one message on topic `security-events`, key = normalized `user_id`, value = `contracts/v1/normalized-event.schema.json`, headers `schema-version: v1`, `content-type: application/json`. The API never writes to PostgreSQL (D-014).
 - The contracts are generated from `apps/web/src/contracts/security-event.ts` with `npm run contracts:generate`; a unit test fails on drift (D-042).
 
+## Internal AI service (FastAPI, Phase 06; D-057, D-058)
+Bound to `127.0.0.1:8000`, called only by the Next.js server. Every route except `/health` needs `Authorization: Bearer <AI_SERVICE_TOKEN>`; the check runs before routing and body parsing. OpenAPI docs are disabled. Errors use `{"error": {"code", "message", ...}}`.
+
+| Route | Behaviour |
+|---|---|
+| `GET /health` | public liveness `{"status": "ok"}` |
+| `GET /v1/ready` | 200 `{"status": "ready", "model"}`, or 503 when Ollama is unreachable or the model is missing |
+| `POST /v1/investigations` | body `contracts/v1/investigation-request.schema.json`; 400 on contract violation (paths and types only); 501 `phase: "08"` until the graph exists; becomes 202 `investigation-accepted` in Phase 08 |
+
+Verdicts follow `contracts/v1/verdict.schema.json` (D-059). The Ollama adapter constrains generation with that schema and re-validates every answer.
+
 Internal FastAPI endpoints use explicit Pydantic request/response models. Do not expose agent tools directly to browsers. The FastAPI service is internal: only the Next.js server calls it, authenticated with `AI_SERVICE_TOKEN` (D-022). Shared payload schemas live in `contracts/v1/` (D-011).

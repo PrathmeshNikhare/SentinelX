@@ -1,7 +1,7 @@
 # Phase 05 — Correlation & Incidents — Handoff
 
 PHASE: 05
-STATUS: READY_FOR_NEXT_PHASE
+STATUS: COMPLETE (receiver accepted 2026-10-09 at Phase 06 start: verify.py 23/23, detection pytest 72/72, key files tracked)
 GATE: `/verify-phase` APPROVED (2026-10-09)
 BASE COMMIT: `465d878` (Phase 04). Phase 05 is the commit that adds this file.
 PREVIOUS PHASE: 04 accepted as COMPLETE at the start of this phase (verify.py 23/23, detection pytest 57/57, retraining reproduced the model version).

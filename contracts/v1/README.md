@@ -10,4 +10,8 @@ Versioned cross-service contracts (D-011, D-042). The JSON Schemas are **generat
 | `normalized-event.schema.json` | Value of messages on Kafka topic `security-events`, consumed by the detection worker (Phase 04) |
 | `examples/security-event.json`, `examples/normalized-event.json` | Example pair; the second is the normalization of the first. Every consumer's contract test must parse them. |
 
-Investigation request/response and verdict contracts follow in Phase 06.
+| `verdict.schema.json` | Structured investigation verdict (CLAUDE.md shape, D-059); source: `services/ai/sentinelx_ai/contracts.py` |
+| `investigation-request.schema.json`, `investigation-accepted.schema.json` | Next.js server ↔ AI service investigation start (D-015, D-059) |
+| `examples/verdict.json`, `examples/investigation-*.json` | Examples parsed by the AI service tests |
+
+Each contract's source is the service that owns it: the zod schemas in `apps/web/src/contracts/` for events (D-042), the Pydantic models in `services/ai` for verdict and investigation contracts (D-059, regenerate with `python -m sentinelx_ai.contracts`).

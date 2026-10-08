@@ -70,7 +70,7 @@ done
 python3 scripts/verify.py
 ```
 
-Optional before Phase 06: `ollama pull llama3.2:3b` (the model choice is confirmed in Phase 06).
+Required from Phase 06: `ollama pull llama3.2:3b` (D-056); `verify.py` fails when Ollama is unreachable.
 
 ## Verification
 `python scripts/verify.py` prints `[PASS]`, `[FAIL]` or `[WARN]` per check and exits non-zero on any FAIL. With the Compose stack stopped, the infrastructure checks FAIL by design.
@@ -89,6 +89,13 @@ Events reach PostgreSQL (the console's Events page), and alerting events become 
 
 ## Detection worker (Phase 04)
 In `services/detection`, train the model once (`python -m sentinelx_detection.train`; deterministic, about 3 s), then run `python -m sentinelx_detection.worker`. Use `--idle-exit 15` to process the backlog and exit. It consumes `security-events`, stores events, detection signals, alerts and incidents as `sentinelx_app`, and logs one JSON line per event with signals, anomaly, risk, the alert decision and the correlation action. To rebuild alerts and incidents for events processed by an older version, replay with a new consumer group: `python -m sentinelx_detection.worker --group backfill-<name> --idle-exit 15` (idempotent, D-055). See `services/detection/README.md`.
+
+## AI service (Phase 06)
+1. Put a random token of 32+ characters in `.env` as `AI_SERVICE_TOKEN`: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The service refuses to start without one.
+2. Make sure Ollama is running with `OLLAMA_MODEL` pulled (`ollama pull llama3.2:3b`).
+3. In `services/ai`, run `python -m sentinelx_ai`; it serves on `127.0.0.1:8000`.
+
+The first generation after Ollama loads the model took about 40 s on the reference machine, and warm calls about 5–7 s. See `services/ai/README.md`.
 
 ## Database
 `npm run db:migrate` and `npm run db:seed` (in `apps/web`) connect with `DATABASE_URL` from the repo-root `.env` as the owner role. Both are idempotent. After editing `src/db/schema.ts`, run `npm run db:generate` and commit the new file in `apps/web/drizzle/`; `verify.py` fails on schema drift. `npm run test:kafka` produces and consumes on the isolated `security-events-test` topic; `npm run test:db` creates and drops its own `sentinelx_test_*` database; `npm run test:e2e` does the same with `sentinelx_e2e`. `npm run db:roles` enables LOGIN for `sentinelx_app` with the password in `APP_DATABASE_URL`.

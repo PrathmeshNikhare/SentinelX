@@ -1,0 +1,24 @@
+{
+  "$id": "https://sentinelx.local/contracts/v1/investigation-accepted.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "AI service -> Next.js server: the run is queued; poll its status (D-015).",
+  "properties": {
+    "investigation_run_id": {
+      "pattern": "^run_[0-9a-f]{16}$",
+      "title": "Investigation Run Id",
+      "type": "string"
+    },
+    "status": {
+      "const": "queued",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "investigation_run_id",
+    "status"
+  ],
+  "title": "SentinelX investigation accepted v1",
+  "type": "object"
+}

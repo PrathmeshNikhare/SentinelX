@@ -216,10 +216,10 @@ def check_qdrant() -> Result:
 
 
 def check_ollama() -> Result:
-    # WARN-only until Phase 06 (docs/07_PHASES.md, Phase 00 exit item 5).
+    # Required from Phase 06 (the AI service). The configured model is checked by the AI service's live test.
     url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/") + "/api/tags"
     status = http_status(url)
-    return Result("ollama reachable", PASS if status == 200 else WARN, f"{url} HTTP {status}")
+    return Result("ollama reachable", PASS if status == 200 else FAIL, f"{url} HTTP {status}")
 
 
 def check_schema_drift(web: Path) -> Result:

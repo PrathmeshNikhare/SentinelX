@@ -346,6 +346,39 @@ Transitions are analyst actions in the web app: `PATCH /api/incidents/:id {"stat
 ### D-055 — Backfilling the dev database (Phase 05)
 Events processed before Phase 05 got no alerts. The worker is replayed once with a fresh consumer group (`--group backfill-phase05`), which is deterministic and idempotent (D-046), to create their alerts and incidents. The long-running worker keeps group `sentinelx-detection`.
 
+### D-056 — Ollama model and structured output (Phase 06; resolves the open Phase 06 decision)
+- The default model stays `llama3.2:3b` (`.env.example`; installed on the reference machine, 2.0 GB Q4_K_M). The adapter is model-agnostic through `OLLAMA_MODEL` (for example `gemma4:e2b`).
+- Structured output uses Ollama's `format` parameter set to the Pydantic model's JSON Schema, with `temperature=0` and `seed=42`. This is near-deterministic, not guaranteed: with the full verdict schema, two identical calls differed in one MITRE ID (`T1210` vs `T1210.001`). Nothing downstream may rely on identical LLM output; the deterministic parts of the system stay in detection.
+- The response is still re-validated with Pydantic: constrained decoding is never trusted alone (CLAUDE.md).
+- `OLLAMA_TIMEOUT_SECONDS` defaults to 120: a measured cold call took 40.5 s (11 s model load), a warm one 7.2 s.
+- The probe also showed the model inventing MITRE IDs (`T1003`, `T1210`) for brute force plus PowerShell evidence. Schema validation cannot catch that; evidence-ID and MITRE-ID existence checks are Phase 10.
+
+### D-057 — AI service structure (Phase 06)
+- Pins: `fastapi` 0.141.1, `uvicorn` 0.53.0, `httpx` 0.28.1, `pydantic` 2.13.5 (transitives frozen; OSV reported no advisories).
+- The Ollama adapter is a thin `httpx` client behind an `LlmClient` protocol: explicit timeouts, no hidden retries, testable with `httpx.MockTransport`. It does not use `langchain-ollama`; LangChain and LangGraph arrive with the tools and graph (Phases 07–08).
+- The service binds `127.0.0.1:8000` (internal, D-022). Endpoints:
+  - `GET /health`: public liveness, no details;
+  - `GET /v1/ready`: authenticated; reports whether Ollama is reachable and the model present;
+  - `POST /v1/investigations`: authenticated; validates the request contract and returns 501 until Phase 08.
+- Errors use the web app's JSON shape `{"error": {"code", "message"}}`.
+
+### D-058 — Internal service authentication (Phase 06)
+- Every route except `/health` requires `Authorization: Bearer <AI_SERVICE_TOKEN>`, compared in constant time (SHA-256 digests plus `hmac.compare_digest`).
+- The service refuses to start when the token is missing, shorter than 32 characters or a known placeholder (D-025).
+- OpenAPI docs (`/docs`, `/redoc`, `/openapi.json`) are disabled, so nothing describes the API to unauthenticated callers.
+
+### D-059 — AI-owned contracts: Pydantic source, generated JSON Schema (Phase 06; refines D-042)
+Each contract's source of truth lives in the service that owns it.
+- The verdict, investigation-request and investigation-accepted contracts are Pydantic models in `services/ai`.
+- `python -m sentinelx_ai.contracts` writes `contracts/v1/{verdict,investigation-request,investigation-accepted}.schema.json`; a pytest drift test keeps them in sync, and examples live in `contracts/v1/examples/`.
+
+Verdict rules (CLAUDE.md shape, extra fields forbidden):
+- `verdict` 3–120 characters; `confidence` 0–1; `severity` LOW/MEDIUM/HIGH/CRITICAL; `summary` 1–2000 characters;
+- `evidence_ids`: 1–20 unique `ev_` IDs (D-030); `mitre_techniques`: 0–10 unique `T####(.###)`;
+- `recommendations`: 1–10 items of 3–300 characters each.
+
+Whether the cited IDs actually exist is checked in Phase 10.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|
@@ -353,5 +386,5 @@ Events processed before Phase 05 got no alerts. The worker is replayed once with
 | ~~TypeScript Kafka client~~ — resolved by D-040 | 03 |
 | ~~Isolation Forest feature list and alert threshold~~ — resolved by D-049, D-050 | 04 |
 | ~~Correlation window and grouping keys~~ — resolved by D-053 | 05 |
-| Ollama model confirmation (`llama3.2:3b` default) and structured-output mode | 06 |
+| ~~Ollama model confirmation and structured-output mode~~ — resolved by D-056 | 06 |
 | Embedding model and vector dimension (default candidate `all-MiniLM-L6-v2`, 384-d, CPU torch) | 09 |

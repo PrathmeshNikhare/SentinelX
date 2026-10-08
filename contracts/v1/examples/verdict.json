@@ -1,0 +1,9 @@
+{
+  "verdict": "Possible Account Compromise",
+  "confidence": 0.93,
+  "severity": "HIGH",
+  "summary": "Five failed logins from a malicious IP were followed by a successful login and encoded PowerShell on the same account.",
+  "evidence_ids": ["ev_1a2b3c4d5e6f7a8b", "ev_9f8e7d6c5b4a3f2e"],
+  "mitre_techniques": ["T1110", "T1078"],
+  "recommendations": ["Reset credentials", "Revoke active sessions"]
+}

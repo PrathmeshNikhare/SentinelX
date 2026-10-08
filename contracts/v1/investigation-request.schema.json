@@ -1,0 +1,24 @@
+{
+  "$id": "https://sentinelx.local/contracts/v1/investigation-request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Next.js server -> AI service: start an investigation of one incident (D-015).",
+  "properties": {
+    "incident_id": {
+      "pattern": "^inc_[0-9a-f]{16}$",
+      "title": "Incident Id",
+      "type": "string"
+    },
+    "requested_by": {
+      "pattern": "^an_[0-9a-f]{16}$",
+      "title": "Requested By",
+      "type": "string"
+    }
+  },
+  "required": [
+    "incident_id",
+    "requested_by"
+  ],
+  "title": "SentinelX investigation request v1",
+  "type": "object"
+}
