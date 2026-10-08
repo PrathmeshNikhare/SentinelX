@@ -9,6 +9,7 @@ All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error
 |---|---|
 | `GET /api/incidents` | implemented: `{incidents: [...]}` (latest 100) |
 | `GET /api/incidents/:id` | implemented: `{incident: {..., events: [...]}}`; malformed or unknown id → 404 |
+| `PATCH /api/incidents/:id` | implemented (Phase 05, D-054): body exactly `{"status": "open"\|"investigating"\|"resolved"}` → 200 `{incident: {id, status}}`; 400 bad body, 404, 409 `invalid_transition` with `current`, 413, 415 |
 | `POST /api/events` | implemented (Phase 03): see below |
 | `POST /api/incidents/:id/investigate` | 501, Phases 06–08 |
 | `GET /api/investigations/:id` | 501, Phases 06–08 |

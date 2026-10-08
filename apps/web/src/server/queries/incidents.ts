@@ -1,7 +1,8 @@
 import "server-only";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { incidentEvents, incidents, securityEvents } from "../../db/schema.ts";
 import { isIncidentId } from "../../lib/ids.ts";
+import { canTransition, type IncidentStatus } from "../../lib/incident-lifecycle.ts";
 import { db } from "../db.ts";
 
 const MAX_INCIDENTS = 100;
@@ -52,4 +53,25 @@ export async function getIncident(id: string) {
     .orderBy(asc(securityEvents.occurredAt))
     .limit(MAX_INCIDENT_EVENTS);
   return { ...incident, events };
+}
+
+export type TransitionResult =
+  | { ok: true; from: IncidentStatus; to: IncidentStatus }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "invalid_transition"; current: IncidentStatus };
+
+/** Atomic lifecycle change (D-054): the row is locked, the transition checked, then updated in one transaction. */
+export async function transitionIncident(id: string, to: IncidentStatus): Promise<TransitionResult> {
+  if (!isIncidentId(id)) return { ok: false, reason: "not_found" };
+  return db().transaction(async (tx) => {
+    const [row] = await tx
+      .select({ status: incidents.status })
+      .from(incidents)
+      .where(eq(incidents.id, id))
+      .for("update");
+    if (!row) return { ok: false, reason: "not_found" } as const;
+    if (!canTransition(row.status, to)) return { ok: false, reason: "invalid_transition", current: row.status } as const;
+    await tx.update(incidents).set({ status: to, updatedAt: sql`now()` }).where(eq(incidents.id, id));
+    return { ok: true, from: row.status, to } as const;
+  });
 }

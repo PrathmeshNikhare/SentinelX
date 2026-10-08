@@ -1,7 +1,7 @@
 # Phase 04 — Detection Engine — Handoff
 
 PHASE: 04
-STATUS: READY_FOR_NEXT_PHASE
+STATUS: COMPLETE (receiver accepted 2026-10-09 at Phase 05 start: verify.py 23/23, detection pytest 57/57, retraining reproduced iforest-v1-bf36c4b809a6, key files tracked, artifact untracked)
 GATE: `/verify-phase` APPROVED (2026-10-08)
 BASE COMMIT: `b3d4ed9` (Phase 03). Phase 04 is the commit that adds this file.
 PREVIOUS PHASE: 03 accepted as COMPLETE at the start of this phase (verify.py 23/23, `security-events` = 17, contracts regenerate identically).

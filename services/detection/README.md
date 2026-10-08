@@ -7,9 +7,10 @@ Detection worker (D-013, D-046):
 2. validates each message against `contracts/v1/normalized-event.schema.json`;
 3. persists events idempotently;
 4. runs deterministic rules, the Isolation Forest anomaly signal and the deterministic risk engine;
-5. persists `detection_signals`.
+5. persists `detection_signals`;
+6. writes an alert when risk ≥ 40 (D-052) and correlates events into per-user incidents over a 60-minute event-time window (D-053).
 
-Alerts and incidents are added in Phase 05.
+All of it happens in one transaction per event.
 
 ## Modules (`sentinelx_detection/`)
 | Module | Role |
@@ -22,6 +23,7 @@ Alerts and incidents are added in Phase 05.
 | `baseline.py`, `anomaly.py`, `train.py` | seeded synthetic baseline, Isolation Forest training/scoring, artifact save/load |
 | `risk.py` | risk score, levels, alert threshold 40 (D-050) |
 | `pipeline.py` | one event → signals, anomaly, risk |
+| `correlation.py` | pure correlation plan (link/create/none), incident titles, alert reasons (D-052, D-053) |
 | `repository.py` | psycopg queries (IPv4-preferring, time-bounded `connect()`, D-051) |
 | `worker.py` | Kafka consume loop with manual commits (D-047) |
 
@@ -46,7 +48,7 @@ python3.12 -m venv .venv
 ```sh
 python -m sentinelx_detection.worker                    # long-running; Ctrl+C stops after the current event
 python -m sentinelx_detection.worker --idle-exit 15     # process the backlog, then exit
-python -m sentinelx_detection.worker --group replay-1   # a new consumer group re-reads the topic (idempotent)
+python -m sentinelx_detection.worker --group replay-1   # a new consumer group re-reads the topic (idempotent, D-055)
 ```
 Environment (repo-root `.env`): `APP_DATABASE_URL` (connects as `sentinelx_app`, D-035), `KAFKA_BROKERS`, optional `KAFKA_EVENTS_TOPIC` (default `security-events`) and `DETECTION_GROUP_ID` (default `sentinelx-detection`). The model artifact is never committed and must be trained locally; `joblib.load` unpickles, so never load a downloaded artifact (D-049).
 

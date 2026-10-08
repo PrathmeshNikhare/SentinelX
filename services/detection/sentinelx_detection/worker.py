@@ -24,6 +24,7 @@ from . import anomaly
 from .anomaly import AnomalyModel
 from .config import DEFAULT_GROUP_ID, DEFAULT_MODEL_PATH, DEFAULT_TOPIC, optional_env, require_env
 from .contract import ContractError, parse_message
+from .correlation import plan
 from .pipeline import DetectionResult, detect
 from .repository import Repository, connect
 
@@ -83,6 +84,16 @@ def process_message(
             return "conflict", event.event_id, None
         result = detect(event, repo.load_context(event), model)
         repo.insert_signals(stored.row_id, result.signals)
+        alert_id = repo.insert_alert(stored.row_id, result) if result.should_alert else None
+        active = repo.active_incident(event.user_id)
+        action = plan(event.occurred_at, alert_id is not None, active, repo.is_linked(stored.row_id))
+        incident_id = active.incident_id if action == "link" and active is not None else None
+        if action == "create":
+            incident_id = repo.create_incident(event, result)
+            repo.link_lookback(incident_id, event)
+        if incident_id is not None:
+            repo.link(incident_id, stored.row_id, alert_id)
+            repo.refresh_incident(incident_id, event.user_id)
     log(
         "info",
         "detection.processed",
@@ -93,6 +104,8 @@ def process_message(
         risk=result.risk_score,
         level=result.risk_level,
         alert=result.should_alert,
+        correlation=action,
+        incidentId=incident_id,
         modelVersion=result.model_version,
     )
     return "processed", event.event_id, result

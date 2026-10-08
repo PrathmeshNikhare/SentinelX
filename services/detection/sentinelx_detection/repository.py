@@ -24,7 +24,9 @@ from .context import (
     PriorSignal,
     Reputation,
 )
+from .correlation import CORRELATION_WINDOW, ActiveIncident, alert_reasons, incident_title
 from .models import Event, Signal
+from .pipeline import DetectionResult
 
 CONNECT_TIMEOUT_SECONDS = 10  # psycopg's default is unbounded (D-051)
 
@@ -147,6 +149,136 @@ class Repository:
                 """,
                 [(event_row_id, s.rule_name, s.rule_score, s.severity, s.reason) for s in signals],
             )
+
+    # --- alerts and incidents (D-052, D-053) ---------------------------------------------------------------
+
+    def insert_alert(self, event_row_id: str, result: DetectionResult) -> str:
+        """Idempotent on alerts.event_id; returns the alert id (the existing one on replay)."""
+        row = self.conn.execute(
+            """
+            INSERT INTO alerts (event_id, risk_score, anomaly_score, model_version, severity, reasons_json)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (event_id) DO NOTHING
+            RETURNING id
+            """,
+            (
+                event_row_id,
+                result.risk_score,
+                result.anomaly_score,
+                result.model_version,
+                result.risk_level,
+                Jsonb(alert_reasons(result)),
+            ),
+        ).fetchone()
+        if row is None:
+            row = self.conn.execute("SELECT id FROM alerts WHERE event_id = %s", (event_row_id,)).fetchone()
+        if row is None:  # pragma: no cover - inserted or conflicted inside this transaction
+            raise RuntimeError(f"alert for event {event_row_id} missing")
+        return str(row[0])
+
+    def is_linked(self, event_row_id: str) -> bool:
+        found = self.conn.execute("SELECT 1 FROM incident_events WHERE event_id = %s", (event_row_id,)).fetchone()
+        return found is not None
+
+    def active_incident(self, user_id: str) -> ActiveIncident | None:
+        """The user's most recent non-resolved incident, row-locked against a concurrent status change."""
+        row = self.conn.execute(
+            """
+            SELECT i.id, i.started_at, max(e.occurred_at) AS last_activity
+            FROM incidents i
+            JOIN incident_events ie ON ie.incident_id = i.id
+            JOIN security_events e ON e.id = ie.event_id
+            WHERE i.primary_user_id = %s AND i.status <> 'resolved'
+            GROUP BY i.id, i.started_at
+            ORDER BY last_activity DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        locked = self.conn.execute("SELECT status FROM incidents WHERE id = %s FOR UPDATE", (row[0],)).fetchone()
+        if locked is None or locked[0] == "resolved":  # resolved between the two statements
+            return None
+        return ActiveIncident(incident_id=str(row[0]), started_at=row[1], last_activity=row[2])
+
+    def create_incident(self, event: Event, result: DetectionResult) -> str:
+        row = self.conn.execute(
+            """
+            INSERT INTO incidents (title, risk_score, severity, primary_user_id, primary_ip, started_at)
+            VALUES (%s, %s, %s, %s, %s::inet, %s)
+            RETURNING id
+            """,
+            (
+                incident_title((s.rule_name for s in result.signals), event.user_id),
+                result.risk_score,
+                result.risk_level,
+                event.user_id,
+                event.source_ip,
+                event.occurred_at,
+            ),
+        ).fetchone()
+        if row is None:  # pragma: no cover - INSERT ... RETURNING always returns the row
+            raise RuntimeError("incident insert returned no id")
+        return str(row[0])
+
+    def link(self, incident_id: str, event_row_id: str, alert_id: str | None) -> None:
+        self.conn.execute(
+            "INSERT INTO incident_events (incident_id, event_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            (incident_id, event_row_id),
+        )
+        if alert_id is not None:
+            self.conn.execute(
+                "INSERT INTO incident_alerts (incident_id, alert_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (incident_id, alert_id),
+            )
+
+    def link_lookback(self, incident_id: str, event: Event) -> None:
+        """Context for a new incident: the user's not-yet-linked events in the previous window (D-053)."""
+        self.conn.execute(
+            """
+            INSERT INTO incident_events (incident_id, event_id)
+            SELECT %s, e.id FROM security_events e
+            WHERE e.user_id = %s AND e.occurred_at >= %s AND e.occurred_at < %s
+              AND NOT EXISTS (SELECT 1 FROM incident_events ie WHERE ie.event_id = e.id)
+            ON CONFLICT DO NOTHING
+            """,
+            (incident_id, event.user_id, event.occurred_at - CORRELATION_WINDOW, event.occurred_at),
+        )
+
+    def refresh_incident(self, incident_id: str, user_id: str) -> None:
+        """Recomputes the incident from its linked rows (idempotent): risk, severity, IP, start, title."""
+        rules = self.conn.execute(
+            """
+            SELECT DISTINCT s.rule_name FROM incident_events ie
+            JOIN detection_signals s ON s.event_id = ie.event_id
+            WHERE ie.incident_id = %s
+            """,
+            (incident_id,),
+        ).fetchall()
+        self.conn.execute(
+            """
+            WITH top_alert AS (
+              SELECT a.risk_score, a.severity, e.source_ip
+              FROM incident_alerts ia
+              JOIN alerts a ON a.id = ia.alert_id
+              JOIN security_events e ON e.id = a.event_id
+              WHERE ia.incident_id = %(id)s
+              ORDER BY a.risk_score DESC, e.occurred_at ASC
+              LIMIT 1
+            )
+            UPDATE incidents SET
+              risk_score = (SELECT risk_score FROM top_alert),
+              severity = (SELECT severity FROM top_alert),
+              primary_ip = (SELECT source_ip FROM top_alert),
+              started_at = (SELECT min(e.occurred_at) FROM incident_events ie
+                            JOIN security_events e ON e.id = ie.event_id WHERE ie.incident_id = %(id)s),
+              title = %(title)s,
+              updated_at = now()
+            WHERE id = %(id)s
+            """,
+            {"id": incident_id, "title": incident_title((str(r[0]) for r in rules), user_id)},
+        )
 
 
 def stored_signal_names(conn: psycopg.Connection[Any], external_event_id: str) -> list[str]:

@@ -41,6 +41,7 @@ test.describe("healthy server", () => {
       ["POST", "/api/events"],
       ["POST", `/api/incidents/${UNKNOWN_INCIDENT}/investigate`],
       ["GET", "/api/investigations/run_0000000000000000"],
+      ["PATCH", `/api/incidents/${UNKNOWN_INCIDENT}`],
     ];
     for (const [method, path] of calls) {
       const response = await request.fetch(path, { method });
@@ -143,6 +144,39 @@ test.describe("healthy server", () => {
     await expect(page.getByRole("row", { name: /evt_e2e_1/ })).toContainText("2026-01-01 10:00:00Z");
     const detail = await page.request.get(`/api/incidents/${incidentId}`);
     expect(await detail.json()).toMatchObject({ incident: { id: incidentId, riskScore: 91, events: [{ externalEventId: "evt_e2e_1" }] } });
+  });
+
+  test("incident lifecycle via the page buttons and the API (D-054)", async ({ page }) => {
+    await signIn(page);
+    await expect(page).toHaveURL(`${HEALTHY_URL}/`);
+    const listed = (await (await page.request.get("/api/incidents")).json()) as { incidents: { id: string }[] };
+    const id = listed.incidents[0]?.id;
+    if (!id) throw new Error("expected the incident created by the previous test");
+
+    await page.goto(`/incidents/${id}`);
+    const lifecycle = page.getByRole("form", { name: "Incident status" });
+    await expect(lifecycle.getByRole("button")).toHaveText(["Start investigating", "Resolve"]);
+    await lifecycle.getByRole("button", { name: "Start investigating" }).click();
+    await expect(page.getByText("investigating", { exact: true })).toBeVisible();
+    await expect(lifecycle.getByRole("button")).toHaveText(["Reopen", "Resolve"]);
+    await lifecycle.getByRole("button", { name: "Resolve" }).click();
+    await expect(lifecycle.getByRole("button")).toHaveText(["Reopen"]);
+
+    const patch = (status: unknown, target = id) =>
+      page.request.patch(`/api/incidents/${target}`, { data: JSON.stringify({ status }), headers: { "content-type": "application/json" } });
+    const invalid = await patch("investigating"); // resolved -> investigating is not allowed
+    expect(invalid.status()).toBe(409);
+    expect(await invalid.json()).toMatchObject({ error: { code: "invalid_transition", current: "resolved" } });
+    expect((await patch("bogus")).status()).toBe(400);
+    expect((await patch("open", "inc_0000000000000000")).status()).toBe(404);
+    const reopened = await patch("open");
+    expect(reopened.status()).toBe(200);
+    expect(await reopened.json()).toEqual({ incident: { id, status: "open" } });
+    const extra = await page.request.patch(`/api/incidents/${id}`, {
+      data: JSON.stringify({ status: "resolved", title: "renamed" }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(extra.status()).toBe(400); // only "status" may be changed
   });
 
   test("sign-out revokes the session server-side", async ({ page, browser }) => {

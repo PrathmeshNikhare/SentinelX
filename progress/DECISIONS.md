@@ -311,12 +311,47 @@ On Windows, psycopg tried `localhost` as `::1` first and stalled until its timeo
 - It always sets `connect_timeout=10` (psycopg's default is unbounded), so a misconfigured host fails fast instead of hanging.
 - No `.env` change is needed; the protected `.env` is not touched.
 
+### D-052 — Alert persistence (Phase 05)
+The worker writes an `alerts` row when `risk ≥ 40` (D-050), in the same per-event transaction as the event and its signals, with `ON CONFLICT (event_id) DO NOTHING` (replay-safe).
+- `severity` = the event's risk level.
+- `reasons_json` makes the score explainable: `{"signals": [{rule, score, reason}], "components": {"rule", "anomaly", "reputation", "context"}, "formula": "0.45R + 0.25A + 0.15P + 0.15C"}`.
+- `risk_score`, `anomaly_score` and `model_version` come from the detection result.
+
+### D-053 — Correlation: per monitored user, 60-minute event-time window (Phase 05; resolves the open Phase 05 decision)
+Correlation runs in the detection worker after detection, using event time only, so replay is deterministic. The grouping key is `user_id`. A user's *active* incident is their most recent non-`resolved` incident. Each event is checked against it:
+- **Already linked** to an incident (replay): no change.
+- **Within `[started_at − 60 min, last activity + 60 min]`** of the active incident, where last activity is the latest linked event's `occurred_at`: linked to the incident, together with its alert if it has one. Non-alerting events are linked too, so the incident timeline is complete.
+- **Otherwise, an alerting event** creates a new incident. The user's not-yet-linked events from the previous 60 minutes are linked as context; for example, scenario A's four failed logins before the brute-force alert.
+- **Otherwise**: nothing.
+
+Incident fields are recomputed from the linked rows after each change (idempotent):
+- `risk_score` = highest alert risk, `severity` = its level;
+- `primary_ip` = the IP of the highest-risk alert;
+- `started_at` = the earliest linked event;
+- `title` = a deterministic label from the highest-priority rule among the incident's signals (compromise chain or login-after-failures → "Possible account compromise", privilege escalation, PowerShell, impossible travel, brute force, risky IP, new IP, sensitive file, else "Anomalous activity") plus the user.
+
+Incidents never merge or split, and a `resolved` incident is never reopened by detection: new activity opens a new incident. Deferred: IP-keyed correlation across users (password spraying), which would create one incident per targeted user.
+
+### D-054 — Incident lifecycle (Phase 05)
+States: `open`, `investigating`, `resolved`. Allowed transitions:
+
+| From | To |
+|---|---|
+| `open` | `investigating`, `resolved` |
+| `investigating` | `open`, `resolved` |
+| `resolved` | `open` (manual reopen only) |
+
+Transitions are analyst actions in the web app: `PATCH /api/incidents/:id {"status"}` and buttons on the incident page. They apply as one conditional `UPDATE … WHERE status IN (allowed sources)`, so concurrent changes cannot skip the rules. An invalid transition returns 409. Each change is logged as `incident.status_changed` (analyst id, from, to); a persistent audit table is Phase 12. Detection only reads status (non-`resolved` = active) and never changes it.
+
+### D-055 — Backfilling the dev database (Phase 05)
+Events processed before Phase 05 got no alerts. The worker is replayed once with a fresh consumer group (`--group backfill-phase05`), which is deterministic and idempotent (D-046), to create their alerts and incidents. The long-running worker keeps group `sentinelx-detection`.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|
 | ~~Auth/session implementation and password hashing algorithm~~ — resolved by D-034 | 02 |
 | ~~TypeScript Kafka client~~ — resolved by D-040 | 03 |
 | ~~Isolation Forest feature list and alert threshold~~ — resolved by D-049, D-050 | 04 |
-| Correlation window and grouping keys | 05 |
+| ~~Correlation window and grouping keys~~ — resolved by D-053 | 05 |
 | Ollama model confirmation (`llama3.2:3b` default) and structured-output mode | 06 |
 | Embedding model and vector dimension (default candidate `all-MiniLM-L6-v2`, 384-d, CPU torch) | 09 |

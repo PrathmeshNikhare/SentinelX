@@ -4,10 +4,13 @@ import { notFound } from "next/navigation";
 import { SeverityBadge, StatusBadge } from "@/components/console/badges";
 import { EventTable } from "@/components/console/event-table";
 import { DataUnavailable, EmptyState, Mono } from "@/components/console/states";
+import { Button } from "@/components/ui/button";
 import { formatUtc } from "@/lib/format";
+import { INCIDENT_TRANSITIONS, TRANSITION_LABELS } from "@/lib/incident-lifecycle";
 import { requireSession } from "@/server/auth/session";
 import { load } from "@/server/load";
 import { getIncident } from "@/server/queries/incidents";
+import { changeIncidentStatus } from "./actions";
 
 export const metadata: Metadata = { title: "Incident" };
 
@@ -31,6 +34,14 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
           <SeverityBadge severity={data.severity} />
           <StatusBadge status={data.status} />
         </div>
+        <form action={changeIncidentStatus} className="mt-3 flex gap-2" aria-label="Incident status">
+          <input type="hidden" name="incidentId" value={data.id} />
+          {INCIDENT_TRANSITIONS[data.status].map((next) => (
+            <Button key={next} type="submit" name="status" value={next} variant="outline" size="sm">
+              {TRANSITION_LABELS[next]}
+            </Button>
+          ))}
+        </form>
       </header>
 
       <section aria-label="Risk and identity">

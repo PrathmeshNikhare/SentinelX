@@ -1,4 +1,4 @@
-"""Worker against the real stack: Kafka topic -> worker (as sentinelx_app) -> PostgreSQL (D-046, D-047).
+"""Worker against the real stack: Kafka topic -> worker (as sentinelx_app) -> PostgreSQL (D-046, D-047, D-052-D-054).
 
 Uses a throwaway database migrated by the Drizzle migrations (the only DDL source, D-010) and a unique topic.
 """
@@ -13,8 +13,11 @@ import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+import psycopg
 import pytest
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient
@@ -135,9 +138,24 @@ def publish(stack: Stack, records: list[tuple[str, bytes]]) -> None:
     assert producer.flush(30) == 0
 
 
-def consume_all(stack: Stack, model: AnomalyModel) -> int:
+def consume_all(stack: Stack, model: AnomalyModel, max_messages: int | None = None) -> int:
+    """A fresh consumer group reads the topic from the beginning; stops after `max_messages` or 15 idle seconds."""
     config = WorkerConfig(stack.brokers, stack.topic, f"detect-test-{uuid.uuid4().hex[:8]}", stack.app_url)
-    return run(config, model, idle_exit_seconds=15)
+    return run(config, model, max_messages=max_messages, idle_exit_seconds=15)
+
+
+def incidents_for(conn: psycopg.Connection[Any], user_id: str) -> list[tuple[Any, ...]]:
+    """(id, title, severity, risk, status, started_at, linked events, linked alerts), oldest first."""
+    rows: list[tuple[Any, ...]] = conn.execute(
+        """
+        SELECT i.id, i.title, i.severity::text, i.risk_score, i.status::text, i.started_at,
+               (SELECT count(*) FROM incident_events ie WHERE ie.incident_id = i.id),
+               (SELECT count(*) FROM incident_alerts ia WHERE ia.incident_id = i.id)
+        FROM incidents i WHERE i.primary_user_id = %s ORDER BY i.started_at
+        """,
+        (user_id,),
+    ).fetchall()
+    return rows
 
 
 def test_worker_persists_events_and_the_same_signals_as_the_pure_pipeline(stack: Stack, model: AnomalyModel) -> None:
@@ -149,6 +167,7 @@ def test_worker_persists_events_and_the_same_signals_as_the_pure_pipeline(stack:
         ("noise", b"{not json"),  # poison message: skipped, never blocks the partition
         ("noise", message(first_a, user_id="Upper.Case")),  # violates the contract (lowercase identity)
         ("alice", message(first_a, resource="tampered-resource")),  # reused event_id with different content
+        ("alice", message(first_a)),  # exact duplicate delivery: no second alert, no second link
     ]
     publish(stack, records)
 
@@ -169,18 +188,91 @@ def test_worker_persists_events_and_the_same_signals_as_the_pure_pipeline(stack:
         severities = conn.execute("SELECT DISTINCT severity::text FROM detection_signals ORDER BY 1").fetchall()
         assert {r[0] for r in severities} <= {"MEDIUM", "HIGH", "CRITICAL"}
 
+        # Alerts (D-052): exactly the events the pure pipeline says should alert, with explainable reasons.
+        expected_alerts = {
+            e.event_id: r
+            for sid in scenarios
+            for e, r in zip(scenarios[sid], replay(scenarios[sid], model), strict=True)
+            if r.should_alert
+        }
+        stored_alerts = conn.execute(
+            "SELECT e.external_event_id, a.risk_score, a.severity::text, a.reasons_json FROM alerts a "
+            "JOIN security_events e ON e.id = a.event_id"
+        ).fetchall()
+        assert {row[0] for row in stored_alerts} == set(expected_alerts)
+        for external_id, risk, severity, reasons in stored_alerts:
+            assert (risk, severity) == (
+                expected_alerts[external_id].risk_score,
+                expected_alerts[external_id].risk_level,
+            )
+            assert set(reasons["components"]) == {"rule", "anomaly", "reputation", "context"}
+            assert [s["rule"] for s in reasons["signals"]] == [
+                s.rule_name for s in expected_alerts[external_id].signals
+            ]
+
+        # Incidents (D-053): A -> one compromise incident with its full timeline, C -> one, B -> none.
+        a_results = replay(scenarios["A"], model)
+        [(_, title, severity, risk, status, started, n_events, n_alerts)] = incidents_for(conn, "alice")
+        assert title == "Possible account compromise: alice"
+        assert (risk, severity) == (max(r.risk_score for r in a_results), "CRITICAL")
+        assert (status, started) == ("open", scenarios["A"][0].occurred_at)  # the 4 failed logins came via lookback
+        assert (n_events, n_alerts) == (9, sum(r.should_alert for r in a_results))
+        [(_, title_c, severity_c, risk_c, _, _, n_events_c, n_alerts_c)] = incidents_for(conn, "carol")
+        c_first = replay(scenarios["C"], model)[0]
+        assert title_c == "Login from a risky IP: carol"
+        assert (risk_c, severity_c, n_events_c, n_alerts_c) == (c_first.risk_score, c_first.risk_level, 4, 1)
+        assert incidents_for(conn, "bob.admin") == []
+
 
 def test_replaying_the_topic_is_idempotent(stack: Stack, model: AnomalyModel) -> None:
     def snapshot() -> tuple[object, ...]:
         with connect(stack.owner_url) as conn:
-            events = conn.execute("SELECT count(*) FROM security_events").fetchone()
-            signals = conn.execute(
-                "SELECT e.external_event_id, s.rule_name, s.rule_score FROM detection_signals s "
-                "JOIN security_events e ON e.id = s.event_id ORDER BY 1, 2"
-            ).fetchall()
-        return (events, tuple(signals))
+            return tuple(
+                tuple(conn.execute(query).fetchall())
+                for query in (
+                    "SELECT count(*) FROM security_events",
+                    "SELECT e.external_event_id, s.rule_name, s.rule_score FROM detection_signals s "
+                    "JOIN security_events e ON e.id = s.event_id ORDER BY 1, 2",
+                    "SELECT id, event_id, risk_score, reasons_json::text FROM alerts ORDER BY 1",
+                    "SELECT id, title, risk_score, severity::text, primary_ip::text, started_at "
+                    "FROM incidents ORDER BY 1",
+                    "SELECT incident_id, event_id FROM incident_events ORDER BY 1, 2",
+                    "SELECT incident_id, alert_id FROM incident_alerts ORDER BY 1, 2",
+                )
+            )
 
     before = snapshot()
-    assert before[0] == (17,)
+    assert before[0] == ((17,),)
     consume_all(stack, model)  # new consumer group: re-reads the whole topic
-    assert snapshot() == before
+    assert snapshot() == before  # no duplicate alerts, incidents or links; nothing re-titled or re-scored
+
+
+def test_correlation_window_and_resolved_incidents(stack: Stack, model: AnomalyModel) -> None:
+    """A burst after the 60-minute window opens a new incident; a resolved incident is never reused (D-053)."""
+
+    def send(base_offset: timedelta) -> None:
+        events = scenario_events("A", THURSDAY_AFTERNOON + base_offset)
+        publish(stack, [(e.user_id, message(e)) for e in events])
+        # A fresh group re-reads everything: earlier messages replay as no-ops, the new ones are processed.
+        assert consume_all(stack, model, max_messages=len(events) + stack_messages()) > 0
+
+    def stack_messages() -> int:
+        with connect(stack.owner_url) as conn:
+            row = conn.execute("SELECT count(*) FROM security_events").fetchone()
+        return int(row[0]) + 4 if row else 0  # + the 4 skipped/duplicate messages of the first test
+
+    send(timedelta(hours=3))  # 3 h after the first burst: outside the window
+    with connect(stack.owner_url) as conn:
+        first, second = incidents_for(conn, "alice")
+        assert second[5] == THURSDAY_AFTERNOON + timedelta(hours=3)  # no lookback into the old burst
+        assert (second[6], second[1]) == (9, "Possible account compromise: alice")
+        conn.execute("UPDATE incidents SET status = 'resolved' WHERE id = %s", (second[0],))
+        conn.commit()
+
+    send(timedelta(hours=3, minutes=20))  # inside the window of the second incident, which is now resolved
+    with connect(stack.owner_url) as conn:
+        incidents = incidents_for(conn, "alice")
+        assert len(incidents) == 3
+        assert incidents[1][4:] == ("resolved", second[5], 9, second[7])  # untouched after resolution
+        assert incidents[2][4] == "open" and incidents[2][6] == 9
+        assert incidents[0] == first
