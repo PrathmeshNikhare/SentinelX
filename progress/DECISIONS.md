@@ -113,6 +113,14 @@ Services refuse to start when a required secret (e.g. `SESSION_SECRET`, `AI_SERV
 - `progress/CURRENT_HANDOFF.md` is a pointer to the latest handoff file.
 - Claude Code subagent files carry YAML frontmatter so they register.
 
+### D-028 — PostgreSQL host port 5433 (Phase 00)
+The Compose PostgreSQL publishes on `127.0.0.1:${POSTGRES_HOST_PORT}` with a default of `5433` in `.env.example`. The reference machine runs a native PostgreSQL 18 service on 5432, and native installs are common. Container-internal port stays 5432. Kafka's 9092 is fixed because it is the advertised host listener.
+
+### D-029 — Service venvs use Python 3.12; dev tool and image pins (Phase 00)
+Service venvs are created with Python 3.12 (D-024 allows 3.12+) for ML wheel availability (scikit-learn, torch via sentence-transformers). `scripts/verify.py` stays stdlib-only so it runs on any Python. Pinned in Phase 00:
+- dev tools: ruff 0.16.10, mypy 2.4.0, pytest 9.1.1, TypeScript 6.0.3, ESLint 10.12.0, typescript-eslint 8.71.1, Vitest 5.0.3, @types/node 24.19.1;
+- images: `postgres:17.6-alpine`, `apache/kafka:4.1.0`, `qdrant/qdrant:v1.15.0`.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|

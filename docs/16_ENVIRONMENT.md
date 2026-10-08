@@ -1,7 +1,72 @@
 # 16 — Environment
 
-Required: Node.js LTS, Python 3.12+, Docker Desktop, Git, Ollama.
+Local-first development must work without a paid external AI API. Never commit credentials; only `.env.example` is tracked.
 
-Core services: PostgreSQL, Kafka, Qdrant, Ollama, Next.js, FastAPI and detection worker.
+## Required tools
+Versions verified on the reference machine (Windows 11, 2026-10-08). Newer patch versions are fine.
 
-Use `.env.example`; never commit credentials. Local-first development must work without a paid external AI API.
+| Tool | Version | Notes |
+|---|---|---|
+| Git | 2.55 | |
+| Node.js | 24.x Active LTS (24.11.0) with npm 11 | `engines.node >= 24` in `apps/web` |
+| Python | 3.12.x (3.12.5) | Service venvs use 3.12 for ML wheel availability (D-029). `scripts/verify.py` runs on any Python 3.10+. |
+| Docker Desktop | Engine 29, Compose v5 | Infrastructure only (D-023) |
+| Ollama | any recent | Runs natively on the host. Required from Phase 06; WARN-only before that. |
+
+## Topology (D-023)
+| Service | Runs in | Host address |
+|---|---|---|
+| PostgreSQL 17.6 | Compose | `localhost:5433` (D-028; 5432 is often taken by a native install) |
+| Kafka 4.1.0 (single-node KRaft) | Compose | `localhost:9092` (containers use `kafka:29092`) |
+| Qdrant 1.15.0 | Compose | `localhost:6333` |
+| Ollama | Host | `localhost:11434` (containers use `host.docker.internal:11434`) |
+| Next.js, detection worker, FastAPI | Host (Phases 00–12) | added to Compose in Phase 13 |
+
+Compose ports bind to `127.0.0.1` only. The `security-events` topic (3 partitions) is created idempotently by the one-shot `kafka-init` service. Kafka data is not persisted across `docker compose down`; PostgreSQL and Qdrant use named volumes (`docker compose down -v` wipes them).
+
+## Setup from a clean clone
+
+### Windows (PowerShell)
+```powershell
+git clone <repo-url> sentinelx; cd sentinelx
+Copy-Item .env.example .env
+
+docker compose up -d
+
+Push-Location apps\web; npm ci; Pop-Location
+
+foreach ($s in 'detection','ai') {
+  Push-Location "services\$s"
+  py -3.12 -m venv .venv
+  .venv\Scripts\python -m pip install -r requirements-dev.txt
+  Pop-Location
+}
+
+python scripts\verify.py
+```
+
+### POSIX (bash/zsh)
+```sh
+git clone <repo-url> sentinelx && cd sentinelx
+cp .env.example .env
+
+docker compose up -d
+
+(cd apps/web && npm ci)
+
+for s in detection ai; do
+  (cd "services/$s" && python3.12 -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt)
+done
+
+python3 scripts/verify.py
+```
+
+Optional before Phase 06: `ollama pull llama3.2:3b` (the model choice is confirmed in Phase 06).
+
+## Verification
+`python scripts/verify.py` prints `[PASS]`, `[FAIL]` or `[WARN]` per check and exits non-zero on any FAIL. With the Compose stack stopped, the infrastructure checks FAIL by design.
+
+## Troubleshooting
+- `docker compose` errors with `set POSTGRES_USER in .env`: copy `.env.example` to `.env`.
+- Port already allocated: another process holds 5433, 9092 or 6333. Change `POSTGRES_HOST_PORT` in `.env` (and `DATABASE_URL`) or stop the other process. Kafka's 9092 is tied to its advertised listener and cannot be remapped without editing `docker-compose.yml`.
+- Kafka shows `starting` for up to ~40 s on first boot; `verify.py` reports it unhealthy until then.
