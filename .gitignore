@@ -1,0 +1,42 @@
+# Secrets — only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Playwright
+playwright-report/
+test-results/
+
+# Local data volumes / logs
+/data/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local tooling artifacts (not part of the project)
+.windsurf/
+_trial_temp/
+.claude/settings.local.json
