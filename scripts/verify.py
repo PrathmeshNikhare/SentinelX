@@ -256,6 +256,9 @@ def check_web() -> list[Result]:
         check_schema_drift(web),
         # Throwaway database: clean migration, CRUD/constraints, seeds, role permissions (Phase 01).
         command_check("web: db integration", ["npm", "run", "--silent", "test:db"], cwd=web),
+        # Production build + Playwright on ports 3100/3101 with a throwaway sentinelx_e2e database (Phase 02, D-037).
+        # Needs `npx playwright install chromium` once.
+        command_check("web: e2e (build + playwright)", ["npm", "run", "--silent", "test:e2e"], cwd=web),
     ]
 
 

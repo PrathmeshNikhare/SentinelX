@@ -137,10 +137,52 @@ Migration `0001_roles.sql` creates `sentinelx_app`, `sentinelx_ai_tools` and `se
 - `scripts/verify.py` detects schema drift by running `drizzle-kit generate` against a scratch copy of `drizzle/` and failing if a file is added.
 - `npm audit` reports 4 moderate advisories in drizzle-kit's dev-only `@esbuild-kit` → esbuild ≤0.24.2 chain (esbuild dev-server issue; drizzle-kit never starts that server). Production dependencies audit clean. The only "fix" downgrades drizzle-kit to 0.18, so it is accepted until drizzle-kit drops `@esbuild-kit`.
 
+### D-034 — Analyst authentication and sessions (Phase 02; resolves the open Phase 02 decision)
+- Passwords: Node's built-in `crypto.scrypt` (N=2^17, r=8, p=1, 16-byte salt, 32-byte key), stored as `scrypt$N$r$p$salt$hash` and compared with `timingSafeEqual`. OWASP-acceptable without a native dependency (argon2id would need prebuilt native binaries). Minimum length 12.
+- Sessions are server-side in a new `analyst_sessions` table: `ses_` id, analyst_id, `token_hash` (SHA-256 of a 32-byte random token; the raw token exists only in the cookie), created_at, expires_at (8 h absolute), revoked_at. Logout sets `revoked_at` (the app role has no DELETE, D-031).
+- Cookie `sx_session`: HttpOnly, SameSite=Lax, Path=/, Max-Age 8 h, Secure in production.
+- Login and logout are Server Actions; Next.js rejects cross-origin Server Action posts (Origin vs Host), which covers CSRF for these forms. Unknown email and wrong password return the same message, and an unknown email still runs a scrypt comparison to keep timing similar.
+- Boundary: `src/proxy.ts` (Next 16's replacement for `middleware.ts`) does an optimistic cookie-presence redirect to `/login`. Every console page and API route validates the session against PostgreSQL (`requireSession`); APIs return 401 JSON.
+- No signed cookies, so `SESSION_SECRET` is unused and removed from `.env.example`. D-025 then applies to `AI_SERVICE_TOKEN`.
+- Accounts are created with `npm run analyst:create -- <email> "<name>"`, password from the `ANALYST_PASSWORD` environment variable, using the owner connection. No default account is seeded.
+- Login rate limiting and lockout are deferred to Phase 12 (auth hardening).
+
+### D-035 — The web app connects as `sentinelx_app` (Phase 02)
+The Next.js server uses `APP_DATABASE_URL` (role `sentinelx_app`), never the owner `DATABASE_URL`. `npm run db:roles` (owner) enables LOGIN for `sentinelx_app` and sets its password from `APP_DATABASE_URL`, so no role password lives in migrations (D-031). The AI roles stay NOLOGIN until Phases 06–07. Migration `0002` adds `analyst_sessions` with grants: `sentinelx_app` SELECT/INSERT/UPDATE; AI roles none.
+
+### D-036 — Web UI structure (Phase 02)
+- Tailwind CSS v4 + shadcn/ui components copied into `src/components/ui`; system font stack (no build-time font download).
+- Server Components read data through typed query functions in `src/server/queries/`, guarded by the `server-only` package.
+- Each data view handles loading (`loading.tsx`), empty (explicit empty state), not-found, error (`error.tsx`) and degraded states. A query that fails because PostgreSQL is unreachable renders a "data unavailable" panel instead of crashing the page.
+- Only real counts are shown: no placeholder metrics or charts until real data exists (Phase 03+).
+- API routes: `GET /api/incidents` and `GET /api/incidents/:id` are real; `POST /api/events` (Phase 03), `POST /api/incidents/:id/investigate` and `GET /api/investigations/:id` (Phases 06–08) return 501 with the owning phase.
+
+### D-037 — Phase 02 tests: Playwright against a production build (Phase 02)
+`npm run test:e2e` builds once and starts two `next start` servers: a healthy one on port 3100 using a throwaway `sentinelx_e2e` database, and a degraded one on port 3101 pointed at an unreachable database. The suite covers:
+- auth redirect, failed and successful login, logout with server-side revocation;
+- empty states and not-found;
+- API 401/501;
+- degraded rendering.
+
+Chromium only. Pure logic (password hashing, session tokens, ID validation) has Vitest unit tests; session storage has DB integration tests.
+
+### D-038 — Phase 02 dependencies and fixes (Phase 02)
+- Pins: `next` 16.3.8, `react`/`react-dom` 19.3.0, `tailwindcss`/`@tailwindcss/postcss` 4.3.3, `eslint-config-next` 16.3.8, `@playwright/test` 1.63.0, `server-only` 0.0.1, `radix-ui` 1.6.6, `lucide-react` 1.47.0, `class-variance-authority` 0.7.1, `cn` 0.4.0. All exact.
+- Security exception to the two-week age rule: `npm audit` flagged high-severity Next.js advisories for 16.0.0–16.3.7 (image-optimizer SSRF, cache poisoning, information disclosure). Upgraded from 16.3.6 to the 16.3.8 patch (released 2026-09-30).
+- The shadcn 4 CLI generates components that import `cn` from the npm package `cn`, published by shadcn himself from the `shadcn-ui/cn` repo. Checked: no install scripts, no dependencies. Kept and pinned.
+- The CLI also added `shadcn` (published the day before) and `tw-animate-css` only for CSS imports our five components don't use; both were removed (−225 packages). Add components later with `npx shadcn@4.21.0 add <name>`.
+- `eslint-plugin-react` (via `eslint-config-next`) calls `context.getFilename()`, which ESLint 10 removed. Setting `settings.react.version` avoids its version detection. Probes confirmed the Next.js and hooks rules fire. Lint runs with `--max-warnings 0`.
+- `npm audit --omit=dev`: 0 vulnerabilities. Dev-only advisories remain in drizzle-kit (esbuild ≤0.24.2, D-033) and in `@next/eslint-plugin-next`'s `fast-glob` → `braces` (no patched `braces` exists; it only expands our own lint globs).
+- Next.js reads the repo-root `.env` through `next.config.ts`. App code must not import `src/db/env.ts`: Turbopack treats `new URL(".env", import.meta.url)` as an asset and would bundle the file (the build failed on it).
+- Error logging never includes query parameters: Drizzle errors carry bound values (emails, token hashes, password hashes), so `describeError` keeps only the SQL text and driver code. The session check returns `ok | anonymous | unavailable` instead of throwing, because Next renders pages in parallel with layouts.
+
+### D-039 — Commit Next.js-generated `apps/web/AGENTS.md` and `CLAUDE.md` (Phase 02)
+`next dev` (Next 16, `node_modules/next/dist/server/lib/generate-agent-files.js`) writes `apps/web/AGENTS.md` (a managed block telling coding agents to read the bundled Next.js 16 docs in `node_modules/next/dist/docs/` before writing code) and `apps/web/CLAUDE.md` (`@AGENTS.md`) when it detects an AI coding agent. The content was reviewed: it is accurate (Next 16 renamed `middleware.ts` to `proxy.ts`, etc.) and does not conflict with the root `CLAUDE.md`. The files are committed so this agent instruction is visible and reviewed, and so `next dev` does not leave the tree dirty. Do not hand-edit the managed block; `next dev` rewrites it.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|
-| Auth/session implementation and password hashing algorithm | 02 |
+| ~~Auth/session implementation and password hashing algorithm~~ — resolved by D-034 | 02 |
 | TypeScript Kafka client (kafkajs maintenance status vs Confluent's kafkajs-compatible client) | 03 |
 | Isolation Forest feature list and alert threshold | 04 |
 | Correlation window and grouping keys | 05 |

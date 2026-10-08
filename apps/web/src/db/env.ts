@@ -1,15 +1,23 @@
 import { existsSync } from "node:fs";
 
 const ROOT_ENV_FILE = new URL("../../../../.env", import.meta.url);
+let loaded = false;
 
-/** Owner/migration connection string. Loads the repo-root .env when DATABASE_URL is not already set. */
-export function databaseUrl(): string {
-  if (!process.env.DATABASE_URL && existsSync(ROOT_ENV_FILE)) {
-    process.loadEnvFile(ROOT_ENV_FILE);
-  }
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is not set (copy .env.example to .env at the repo root)");
-  }
-  return url;
+/** Loads the repo-root .env once. Variables already set in the environment take precedence. */
+export function loadRootEnv(): void {
+  if (!loaded && existsSync(ROOT_ENV_FILE)) process.loadEnvFile(ROOT_ENV_FILE);
+  loaded = true;
 }
+
+export function requireEnv(name: string): string {
+  loadRootEnv();
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not set (copy .env.example to .env at the repo root)`);
+  return value;
+}
+
+/** Owner/migration connection string. */
+export const databaseUrl = (): string => requireEnv("DATABASE_URL");
+
+/** Least-privilege web connection string (D-035). */
+export const appDatabaseUrl = (): string => requireEnv("APP_DATABASE_URL");

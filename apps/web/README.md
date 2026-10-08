@@ -2,21 +2,33 @@
 
 Owners (docs/19_AGENT_OWNERSHIP.md): Frontend Engineer (UI), Backend Engineer (server/API boundary), Database Engineer (Drizzle schema in `src/db/`, migrations in `drizzle/`, D-009).
 
-Filled in: Phase 01 (Drizzle schema, migrations, seeds), Phase 02 (Next.js App Router shell, auth), Phase 03 (event API, Kafka producer), Phase 11 (incident UI). Phase 00 provides only the TypeScript toolchain and a smoke test.
+Filled in: Phase 01 (schema, migrations, seeds), Phase 02 (console shell, auth, API), Phase 03 (event API, Kafka producer), Phase 11 (incident UI).
 
-Phase 02 adds Next.js to this existing package (`npm install next react react-dom`) rather than running `create-next-app` into a non-empty directory.
+## Layout
+- `src/app/` — App Router. `login/` (Server Action sign-in), `(console)/` (authenticated layout, overview, incidents, incident detail, events, loading/error states), `api/` (JSON routes).
+- `src/proxy.ts` — optimistic cookie check; real session validation happens in every page and API route (D-034).
+- `src/server/` — server-only code: `db.ts` (pool as `sentinelx_app`, D-035), `auth/` (scrypt passwords, DB sessions), `queries/`, `api.ts` (401/501/503 helpers), `load.ts` (degraded-state wrapper), `log.ts` (JSON logs, no query parameters).
+- `src/components/ui/` — shadcn/ui components; `src/components/console/` — badges, tables, empty/degraded states, sidebar.
+- `src/db/` — schema, migrator, seeds, admin CLI (`cli.ts`). `drizzle/` — migrations.
+- `e2e/` — Playwright suite and its throwaway-database setup (D-037).
 
-## Setup and checks
+## Commands
 ```sh
 npm ci
-npm run typecheck    # tsc --noEmit (strict)
-npm run lint         # eslint
-npm test             # vitest unit project (no services needed)
-npm run test:db      # vitest db project: throwaway database, migrations, CRUD, seeds, role permissions
+npm run dev            # http://localhost:3000 (sign in with an analyst account)
+npm run build && npm run start
+
+npm run typecheck      # next typegen + tsc --noEmit (strict)
+npm run lint           # eslint, zero warnings allowed
+npm test               # vitest unit project
+npm run test:db        # vitest db project (throwaway database)
+npm run test:e2e       # next build + Playwright (ports 3100/3101, throwaway sentinelx_e2e database)
+
+npm run db:generate    # new migration after editing src/db/schema.ts (commit it)
+npm run db:migrate     # apply migrations (owner DATABASE_URL)
+npm run db:seed        # sync reference data from fixtures/
+npm run db:roles       # enable LOGIN for sentinelx_app with the APP_DATABASE_URL password
+ANALYST_PASSWORD=... npm run analyst:create -- <email> "<name>"
 ```
 
-## Database (Phase 01)
-- `src/db/schema.ts` — Drizzle schema (docs/04). `drizzle/` — generated migrations plus `0001_roles.sql` (hand-written roles and grants).
-- `npm run db:generate` — create a migration after editing the schema (commit it).
-- `npm run db:migrate` / `npm run db:seed` — apply migrations / sync reference data from `fixtures/`. Both read `DATABASE_URL` from the repo-root `.env`.
-- Scripts run with Node 24 type stripping (`node src/db/cli.ts`), so relative imports use `.ts` extensions.
+Scripts under `src/db/` and `e2e/` run with Node 24 type stripping, so relative imports use `.ts` extensions. Do not import `src/db/env.ts` from app code (it would make the bundler include `.env`; D-038).

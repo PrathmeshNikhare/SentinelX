@@ -2,6 +2,8 @@
   "compilerOptions": {
     "target": "ES2023",
     "lib": [
+      "DOM",
+      "DOM.Iterable",
       "ES2023"
     ],
     "module": "ESNext",
@@ -19,10 +21,31 @@
       "node"
     ],
     "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true
+    "erasableSyntaxOnly": true,
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "allowJs": false,
+    "incremental": true,
+    "esModuleInterop": true
   },
   "include": [
+    "next-env.d.ts",
     "src",
-    "*.config.ts"
+    "e2e",
+    "*.config.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
   ]
 }

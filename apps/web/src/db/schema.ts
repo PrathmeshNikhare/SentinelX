@@ -50,6 +50,22 @@ export const analysts = pgTable("analysts", {
   createdAt: createdAt(),
 });
 
+// Server-side sessions (D-034). Only the SHA-256 of the cookie token is stored; logout sets revoked_at.
+export const analystSessions = pgTable(
+  "analyst_sessions",
+  {
+    id: prefixedId("ses"),
+    analystId: text("analyst_id")
+      .notNull()
+      .references(() => analysts.id),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: createdAt(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("analyst_sessions_analyst_idx").on(t.analystId)],
+);
+
 export const securityEvents = pgTable(
   "security_events",
   {

@@ -4,7 +4,7 @@ Owner: Architect (shared file; docs/19_AGENT_OWNERSHIP.md). Cross-platform helpe
 
 | Script | Purpose | Phase |
 |---|---|---|
-| `verify.py` | Single verification entrypoint: env, git hygiene, Compose config, infra health and connectivity, web checks (incl. schema drift and DB integration tests from Phase 01) and Python checks. Exit 0 only if nothing FAILs. | 00, 01 |
+| `verify.py` | Single verification entrypoint: env, git hygiene, Compose config, infra health and connectivity, web checks (incl. schema drift and DB integration tests from Phase 01, production build + Playwright E2E from Phase 02) and Python checks. Exit 0 only if nothing FAILs. | 00, 01, 02 |
 | `test_verify.py` | Unit self-test for `verify.py` helpers (run by `verify.py`). | 00 |
 
 Run from the repo root: `python scripts/verify.py`.

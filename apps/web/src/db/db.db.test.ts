@@ -5,6 +5,8 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { authenticate, createSession, findActiveSession, revokeSession, SESSION_TTL_MS } from "../server/auth/session-store.ts";
+import { createAnalyst } from "./admin.ts";
 import { databaseUrl } from "./env.ts";
 import { MIGRATIONS_FOLDER, runMigrations } from "./migrate.ts";
 import {
@@ -24,6 +26,7 @@ import { seedReferenceData } from "./seed.ts";
 
 const EXPECTED_TABLES = [
   "alerts",
+  "analyst_sessions",
   "analysts",
   "detection_signals",
   "evidence",
@@ -299,6 +302,12 @@ describe("role permissions", () => {
     ["sentinelx_app", "INSERT INTO investigation_runs (incident_id) VALUES ('inc_x')", DENIED],
     ["sentinelx_app", "INSERT INTO ip_reputation (ip, reputation, score, source) VALUES ('10.1.1.1', 'unknown', 1, 'x')", DENIED],
     ["sentinelx_app", "CREATE TABLE app_probe (id int)", DENIED],
+    // Sessions (D-034/D-035): web app reads, creates and revokes; nobody deletes; AI roles have no access.
+    ["sentinelx_app", "SELECT 1 FROM analyst_sessions", null],
+    ["sentinelx_app", "UPDATE analyst_sessions SET revoked_at = now()", null],
+    ["sentinelx_app", "DELETE FROM analyst_sessions", DENIED],
+    ["sentinelx_ai_tools", "SELECT 1 FROM analyst_sessions", DENIED],
+    ["sentinelx_ai_writer", "SELECT 1 FROM analyst_sessions", DENIED],
   ])("%s: %s -> %s", async (role, statement, expected) => {
     expect(await asRole(role, statement)).toBe(expected);
   });
@@ -307,14 +316,55 @@ describe("role permissions", () => {
     expect(await asRole("sentinelx_ai_writer", insertEvidence())).toBeNull();
   });
 
-  it("roles cannot log in until a later phase enables them", async () => {
+  it("AI roles cannot log in until Phases 06-07 enable them (sentinelx_app may, via db:roles)", async () => {
     const result = await db.execute<{ rolname: string; rolcanlogin: boolean }>(
-      sql`SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname LIKE 'sentinelx\\_%' ORDER BY rolname`,
+      sql`SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname LIKE 'sentinelx\\_ai\\_%' ORDER BY rolname`,
     );
     expect(result.rows).toEqual([
       { rolname: "sentinelx_ai_tools", rolcanlogin: false },
       { rolname: "sentinelx_ai_writer", rolcanlogin: false },
-      { rolname: "sentinelx_app", rolcanlogin: false },
     ]);
+  });
+});
+
+describe("analyst sessions (D-034)", () => {
+  const password = "a-long-test-password";
+  let analystId: string;
+
+  beforeAll(async () => {
+    analystId = (await createAnalyst(db, { email: " Session.Test@Example.Local ", name: "Session Test", password })).id;
+  });
+
+  it("stores normalized emails and rejects duplicates, weak passwords and malformed emails", async () => {
+    await expect(createAnalyst(db, { email: "session.test@example.local", name: "Dup", password })).rejects.toThrow(
+      /already exists/,
+    );
+    await expect(createAnalyst(db, { email: "weak@example.local", name: "Weak", password: "short" })).rejects.toThrow(
+      /at least/,
+    );
+    await expect(createAnalyst(db, { email: "not-an-email", name: "Bad", password })).rejects.toThrow(/invalid email/);
+  });
+
+  it("authenticates by normalized email and rejects wrong passwords and unknown accounts", async () => {
+    expect(await authenticate(db, "SESSION.TEST@example.local", password)).toEqual({ id: analystId, name: "Session Test" });
+    expect(await authenticate(db, "session.test@example.local", "wrong-password-123")).toBeNull();
+    expect(await authenticate(db, "nobody@example.local", password)).toBeNull();
+  });
+
+  it("resolves sessions until expiry or revocation and stores only the token hash", async () => {
+    const now = new Date("2026-03-01T12:00:00Z");
+    const { token, expiresAt } = await createSession(db, analystId, now);
+    expect(expiresAt.getTime() - now.getTime()).toBe(SESSION_TTL_MS);
+    expect(await findActiveSession(db, token, now)).toMatchObject({ analystId, name: "Session Test" });
+
+    const stored = await db.execute<{ token_hash: string }>(
+      sql`SELECT token_hash FROM analyst_sessions WHERE analyst_id = ${analystId}`,
+    );
+    expect(stored.rows.map((r) => r.token_hash)).not.toContain(token);
+
+    expect(await findActiveSession(db, token, new Date(expiresAt.getTime() + 1))).toBeNull();
+    await revokeSession(db, token, now);
+    expect(await findActiveSession(db, token, now)).toBeNull();
+    expect(await findActiveSession(db, "not-a-token", now)).toBeNull();
   });
 });

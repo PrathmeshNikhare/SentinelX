@@ -1,33 +1,55 @@
-// Usage: node src/db/cli.ts migrate|seed   (npm run db:migrate / npm run db:seed)
-// Logs one JSON line per run; never logs the connection string.
-import { drizzle } from "drizzle-orm/node-postgres";
+// Usage (from apps/web):
+//   npm run db:migrate | npm run db:seed | npm run db:roles
+//   ANALYST_PASSWORD=... npm run analyst:create -- <email> "<name>"
+// Logs one JSON line per run; never logs connection strings or passwords.
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { databaseUrl } from "./env.ts";
+import { createAnalyst, enableAppRoleLogin } from "./admin.ts";
+import { appDatabaseUrl, databaseUrl, requireEnv } from "./env.ts";
 import { runMigrations } from "./migrate.ts";
 import { seedReferenceData } from "./seed.ts";
 
 const log = (fields: Record<string, unknown>) =>
   console.log(JSON.stringify({ ts: new Date().toISOString(), ...fields }));
 
-async function main(command: string | undefined): Promise<void> {
-  const url = databaseUrl();
-  if (command === "migrate") {
-    await runMigrations(url);
-    log({ event: "db.migrate", status: "ok" });
-  } else if (command === "seed") {
-    const pool = new pg.Pool({ connectionString: url, max: 1 });
-    try {
-      const counts = await seedReferenceData(drizzle(pool));
-      log({ event: "db.seed", status: "ok", ...counts });
-    } finally {
-      await pool.end();
-    }
-  } else {
-    throw new Error(`unknown command "${command ?? ""}" (expected migrate or seed)`);
+async function withOwnerDb<T>(fn: (db: NodePgDatabase) => Promise<T>): Promise<T> {
+  const pool = new pg.Pool({ connectionString: databaseUrl(), max: 1 });
+  try {
+    return await fn(drizzle(pool));
+  } finally {
+    await pool.end();
   }
 }
 
-main(process.argv[2]).catch((error: unknown) => {
+async function main([command, ...args]: string[]): Promise<void> {
+  switch (command) {
+    case "migrate":
+      await runMigrations(databaseUrl());
+      log({ event: "db.migrate", status: "ok" });
+      return;
+    case "seed": {
+      const counts = await withOwnerDb((db) => seedReferenceData(db));
+      log({ event: "db.seed", status: "ok", ...counts });
+      return;
+    }
+    case "roles":
+      await enableAppRoleLogin(databaseUrl(), appDatabaseUrl());
+      log({ event: "db.roles", status: "ok", role: "sentinelx_app", login: true });
+      return;
+    case "create-analyst": {
+      const [email, name] = args;
+      if (!email || !name) throw new Error('usage: npm run analyst:create -- <email> "<name>" (password in ANALYST_PASSWORD)');
+      const password = requireEnv("ANALYST_PASSWORD");
+      const created = await withOwnerDb((db) => createAnalyst(db, { email, name, password }));
+      log({ event: "analyst.create", status: "ok", analystId: created.id, email: created.email });
+      return;
+    }
+    default:
+      throw new Error(`unknown command "${command ?? ""}" (expected migrate, seed, roles or create-analyst)`);
+  }
+}
+
+main(process.argv.slice(2)).catch((error: unknown) => {
   log({ event: "db.cli", status: "error", message: error instanceof Error ? error.message : String(error) });
   process.exitCode = 1;
 });

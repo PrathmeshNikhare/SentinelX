@@ -1,19 +1,19 @@
 # SentinelX Project Status
 
 STATUS: READY_FOR_NEXT_PHASE
-CURRENT_PHASE: 01
+CURRENT_PHASE: 02
 PHASE_GATE: APPROVED
-LAST_VERIFIED_HANDOFF: progress/handoffs/phase-01.md
+LAST_VERIFIED_HANDOFF: progress/handoffs/phase-02.md
 BLOCKERS: NONE
 
 ## Current objective
-Phase 01 — Database is ready for receiver verification.
+Phase 02 — Web Shell is ready for receiver verification.
 
 ## Last completed work
-2026-10-08 Phase 01: Drizzle schema (13 tables), migrations incl. least-privilege NOLOGIN roles, reference-data seeds (9 synthetic IPs, 11 ATT&CK techniques), unit + DB integration tests (48), schema-drift and DB checks in `verify.py`, D-030–D-033. Phase 00 accepted as COMPLETE.
+2026-10-08 Phase 02: Next.js 16 console (auth with scrypt + server-side sessions, proxy boundary, overview/incidents/detail/events, loading/error/empty/degraded states), real and placeholder API routes, web app on least-privilege `sentinelx_app`, unit/DB/E2E tests (38/40/9), D-034–D-039. Phase 01 accepted as COMPLETE.
 
 ## Next action
-Run `/start-phase 02`: verify the Phase 01 handoff, mark it COMPLETE or REJECTED, record the auth/session decision, then implement Phase 02 — Web Shell.
+Run `/start-phase 03`: verify the Phase 02 handoff, mark it COMPLETE or REJECTED, record the Kafka client and `POST /api/events` auth decisions, then implement Phase 03 — Event Ingestion.
 
 ## Verification
-`python scripts/verify.py` -> 21 checks, 0 failed. `npm run test:db` -> 32 passed.
+`python scripts/verify.py` -> 22 checks, 0 failed.
