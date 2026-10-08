@@ -9,7 +9,7 @@ All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error
 |---|---|
 | `GET /api/incidents` | implemented: `{incidents: [...]}` (latest 100) |
 | `GET /api/incidents/:id` | implemented: `{incident: {..., events: [...]}}`; malformed or unknown id → 404 |
-| `POST /api/events` | 501, Phase 03 |
+| `POST /api/events` | implemented (Phase 03): see below |
 | `POST /api/incidents/:id/investigate` | 501, Phases 06–08 |
 | `GET /api/investigations/:id` | 501, Phases 06–08 |
 
@@ -22,5 +22,16 @@ All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error
 `GET /api/incidents/:id`
 `POST /api/incidents/:id/investigate` -> `202 {"investigation_run_id": "..."}` (asynchronous, D-015)
 `GET /api/investigations/:id` -> run status (`queued|running|completed|failed`), `requires_review`, verdict and trace
+
+### `POST /api/events` (D-041, D-043)
+- Auth: `Authorization: Bearer <INGEST_API_TOKEN>` (no database access), or an analyst session cookie when no Authorization header is sent.
+- Request: `Content-Type: application/json`, body ≤ 16 KiB, matching `contracts/v1/security-event.schema.json` (unknown fields rejected; `__proto__` keys rejected anywhere; timestamp at most 5 min in the future).
+- Responses:
+  - `202 {"event_id", "status": "accepted"}` once Kafka acknowledged (acks=all);
+  - `400 invalid_json` / `400 validation_failed` with `issues: [{path, message}]`;
+  - `401`, `413`, `415`;
+  - `503` when Kafka does not acknowledge within 8 s.
+- Effect: one message on topic `security-events`, key = normalized `user_id`, value = `contracts/v1/normalized-event.schema.json`, headers `schema-version: v1`, `content-type: application/json`. The API never writes to PostgreSQL (D-014).
+- The contracts are generated from `apps/web/src/contracts/security-event.ts` with `npm run contracts:generate`; a unit test fails on drift (D-042).
 
 Internal FastAPI endpoints use explicit Pydantic request/response models. Do not expose agent tools directly to browsers. The FastAPI service is internal: only the Next.js server calls it, authenticated with `AI_SERVICE_TOKEN` (D-022). Shared payload schemas live in `contracts/v1/` (D-011).

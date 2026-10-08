@@ -19,7 +19,10 @@
     "db:migrate": "node src/db/cli.ts migrate",
     "db:seed": "node src/db/cli.ts seed",
     "db:roles": "node src/db/cli.ts roles",
-    "analyst:create": "node src/db/cli.ts create-analyst"
+    "analyst:create": "node src/db/cli.ts create-analyst",
+    "contracts:generate": "node src/contracts/generate.ts",
+    "test:kafka": "vitest run --project kafka",
+    "demo:send": "node src/demo/send.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -38,6 +41,7 @@
     "vitest": "5.0.3"
   },
   "dependencies": {
+    "@confluentinc/kafka-javascript": "1.10.1",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",
     "drizzle-orm": "0.45.3",
@@ -47,6 +51,7 @@
     "radix-ui": "1.6.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "zod": "4.6.5"
   }
 }

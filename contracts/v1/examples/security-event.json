@@ -1,0 +1,11 @@
+{
+  "event_id": "evt_123",
+  "timestamp": "2026-01-01T10:00:00Z",
+  "user_id": "user_1",
+  "source_ip": "192.0.2.10",
+  "event_type": "authentication",
+  "action": "login",
+  "resource": "portal",
+  "status": "failed",
+  "metadata": {}
+}

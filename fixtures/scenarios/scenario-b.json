@@ -1,0 +1,12 @@
+{
+  "id": "B",
+  "name": "Benign Admin Activity",
+  "description": "An administrator signs in with MFA from a known corporate workstation, installs an agent update under a change ticket, updates its configuration and signs out.",
+  "expected": "Low/medium risk and no invented compromise (docs/12).",
+  "events": [
+    { "offset_seconds": 0, "user_id": "bob.admin", "source_ip": "10.10.1.20", "event_type": "authentication", "action": "login", "resource": "admin-console", "status": "success", "metadata": { "auth_method": "password+mfa", "mfa": true } },
+    { "offset_seconds": 120, "user_id": "bob.admin", "source_ip": "10.10.1.20", "event_type": "process", "action": "execute", "resource": "msiexec.exe", "status": "success", "metadata": { "host": "srv-app-02", "command_line": "msiexec.exe /i agent-update-4.2.msi /qn", "change_ticket": "CHG-1042" } },
+    { "offset_seconds": 300, "user_id": "bob.admin", "source_ip": "10.10.1.20", "event_type": "file_access", "action": "write", "resource": "C:\\Program Files\\Agent\\config.yaml", "status": "success", "metadata": { "host": "srv-app-02", "change_ticket": "CHG-1042" } },
+    { "offset_seconds": 600, "user_id": "bob.admin", "source_ip": "10.10.1.20", "event_type": "authentication", "action": "logout", "resource": "admin-console", "status": "success" }
+  ]
+}

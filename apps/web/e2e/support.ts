@@ -21,6 +21,12 @@ export const E2E_DATABASE = "sentinelx_e2e";
 export const HEALTHY_URL = "http://localhost:3100";
 export const DEGRADED_URL = "http://localhost:3101";
 
+/** Valid only for the E2E servers (both get it via playwright.config.ts). */
+export const E2E_INGEST_TOKEN = "e2e-ingest-token-0123456789abcdefghijklmnop";
+/** Isolated topic: E2E traffic must never reach the worker's `security-events` topic. */
+export const E2E_EVENTS_TOPIC = "security-events-e2e";
+export const kafkaBrokers = (): string => required("KAFKA_BROKERS");
+
 export const E2E_ANALYST = {
   email: "e2e.analyst@sentinelx.local",
   name: "E2E Analyst",

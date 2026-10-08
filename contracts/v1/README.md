@@ -2,6 +2,12 @@
 
 Owner: Architect (docs/19_AGENT_OWNERSHIP.md). Changes affecting another service need review.
 
-Versioned cross-service contracts as JSON Schema plus example payloads (D-011). TypeScript and Pydantic models must parse the examples in contract tests. Breaking changes go to `contracts/v2/`.
+Versioned cross-service contracts (D-011, D-042). The JSON Schemas are **generated**: the source of truth is `apps/web/src/contracts/security-event.ts`. Regenerate with `npm run contracts:generate` (in `apps/web`); a unit test fails if these files drift. Breaking changes go to `contracts/v2/`.
 
-Filled in: Phase 03 (security event), Phase 06 (investigation request/response, verdict).
+| File | Contract |
+|---|---|
+| `security-event.schema.json` | Body of `POST /api/events` (Phase 03) |
+| `normalized-event.schema.json` | Value of messages on Kafka topic `security-events`, consumed by the detection worker (Phase 04) |
+| `examples/security-event.json`, `examples/normalized-event.json` | Example pair; the second is the normalization of the first. Every consumer's contract test must parse them. |
+
+Investigation request/response and verdict contracts follow in Phase 06.

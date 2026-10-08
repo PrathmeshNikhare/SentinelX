@@ -23,6 +23,7 @@ docker compose up -d
 # per service: create services/<name>/.venv with Python 3.12, then pip install -r requirements-dev.txt
 python scripts/verify.py
 (cd apps/web && npm run dev)       # http://localhost:3000
+(cd apps/web && npm run demo:send -- A)   # needs INGEST_API_TOKEN in .env (docs/16)
 ```
 
 ## Working with the harness

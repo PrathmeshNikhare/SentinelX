@@ -1,0 +1,17 @@
+{
+  "id": "A",
+  "name": "Possible Account Compromise",
+  "description": "Five failed VPN logins from a malicious IP, then a successful login from the same IP, an encoded PowerShell command and reads of confidential finance and HR files.",
+  "expected": "Brute-force, unusual-login and PowerShell signals; elevated anomaly; HIGH/CRITICAL risk; one incident; evidence-backed Possible Account Compromise verdict (docs/12).",
+  "events": [
+    { "offset_seconds": 0, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "authentication", "action": "login", "resource": "vpn-portal", "status": "failed", "metadata": { "auth_method": "password", "failure_reason": "bad_password" } },
+    { "offset_seconds": 20, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "authentication", "action": "login", "resource": "vpn-portal", "status": "failed", "metadata": { "auth_method": "password", "failure_reason": "bad_password" } },
+    { "offset_seconds": 40, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "authentication", "action": "login", "resource": "vpn-portal", "status": "failed", "metadata": { "auth_method": "password", "failure_reason": "bad_password" } },
+    { "offset_seconds": 60, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "authentication", "action": "login", "resource": "vpn-portal", "status": "failed", "metadata": { "auth_method": "password", "failure_reason": "bad_password" } },
+    { "offset_seconds": 80, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "authentication", "action": "login", "resource": "vpn-portal", "status": "failed", "metadata": { "auth_method": "password", "failure_reason": "bad_password" } },
+    { "offset_seconds": 100, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "authentication", "action": "login", "resource": "vpn-portal", "status": "success", "metadata": { "auth_method": "password", "new_device": true } },
+    { "offset_seconds": 160, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "process", "action": "execute", "resource": "powershell.exe", "status": "success", "metadata": { "host": "wks-alice-01", "parent_process": "explorer.exe", "command_line": "powershell.exe -NoProfile -WindowStyle Hidden -EncodedCommand SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA" } },
+    { "offset_seconds": 220, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "file_access", "action": "read", "resource": "\\\\fs01\\finance\\payroll-2026.xlsx", "status": "success", "metadata": { "host": "wks-alice-01", "sensitivity": "confidential" } },
+    { "offset_seconds": 240, "user_id": "alice", "source_ip": "203.0.113.45", "event_type": "file_access", "action": "read", "resource": "\\\\fs01\\hr\\employee-records.csv", "status": "success", "metadata": { "host": "wks-alice-01", "sensitivity": "confidential" } }
+  ]
+}

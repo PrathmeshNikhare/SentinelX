@@ -1,0 +1,12 @@
+{
+  "id": "C",
+  "name": "Anomalous but Unclear",
+  "description": "A user signs in with MFA from a first-seen hosting-provider IP on a new device and browses engineering files; no malicious command is observed.",
+  "expected": "Anomaly signal and a cautious, verification-oriented verdict (docs/12).",
+  "events": [
+    { "offset_seconds": 0, "user_id": "carol", "source_ip": "198.51.100.77", "event_type": "authentication", "action": "login", "resource": "vpn-portal", "status": "success", "metadata": { "auth_method": "password+mfa", "mfa": true, "new_device": true } },
+    { "offset_seconds": 90, "user_id": "carol", "source_ip": "198.51.100.77", "event_type": "file_access", "action": "list", "resource": "\\\\fs01\\engineering", "status": "success" },
+    { "offset_seconds": 150, "user_id": "carol", "source_ip": "198.51.100.77", "event_type": "file_access", "action": "read", "resource": "\\\\fs01\\engineering\\roadmap-2027.pdf", "status": "success", "metadata": { "sensitivity": "internal" } },
+    { "offset_seconds": 400, "user_id": "carol", "source_ip": "198.51.100.77", "event_type": "authentication", "action": "logout", "resource": "vpn-portal", "status": "success" }
+  ]
+}

@@ -35,6 +35,9 @@ for (const [network, prefix] of [
   SYNTHETIC_RANGES.addSubnet(network, prefix, "ipv4");
 }
 
+/** True for RFC 1918 / RFC 5737 IPv4 addresses, the only ones fixtures may use (D-032). */
+export const isSyntheticIp = (ip: string): boolean => isIP(ip) === 4 && SYNTHETIC_RANGES.check(ip, "ipv4");
+
 const TECHNIQUE_ID = /^T[0-9]{4}(\.[0-9]{3})?$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -74,7 +77,7 @@ export function parseIpReputationFixture(raw: unknown): IpReputationRow[] {
     const where = `ip_reputation.entries[${i}]`;
     if (!isRecord(entry)) throw new FixtureError(`${where}: expected an object`);
     const ip = requireString(entry, "ip", where);
-    if (isIP(ip) !== 4 || !SYNTHETIC_RANGES.check(ip, "ipv4")) {
+    if (!isSyntheticIp(ip)) {
       throw new FixtureError(`${where}.ip: ${ip} is not a synthetic IPv4 address (RFC 1918 / RFC 5737)`);
     }
     if (seen.has(ip)) throw new FixtureError(`${where}.ip: duplicate ${ip}`);

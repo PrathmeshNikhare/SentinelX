@@ -188,8 +188,8 @@ def check_kafka() -> Result:
         socket.create_connection(address, timeout=5).close()
     except OSError as exc:
         return Result(name, FAIL, f"{address[0]}:{address[1]} {exc}")
-    # ponytail: lists topics through the broker's HOST listener (localhost:9092) from inside the container;
-    # a host-side Kafka client check arrives with the Phase 03 producer.
+    # Lists topics through the broker's HOST listener from inside the container. A real host-side produce/consume
+    # round trip is covered by the `web: kafka integration` check (Phase 03).
     proc = run(
         ["docker", "compose", "exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh",
          "--bootstrap-server", "localhost:9092", "--list"],
@@ -256,6 +256,8 @@ def check_web() -> list[Result]:
         check_schema_drift(web),
         # Throwaway database: clean migration, CRUD/constraints, seeds, role permissions (Phase 01).
         command_check("web: db integration", ["npm", "run", "--silent", "test:db"], cwd=web),
+        # Host-side produce/consume through the real producer on an isolated test topic (Phase 03).
+        command_check("web: kafka integration", ["npm", "run", "--silent", "test:kafka"], cwd=web),
         # Production build + Playwright on ports 3100/3101 with a throwaway sentinelx_e2e database (Phase 02, D-037).
         # Needs `npx playwright install chromium` once.
         command_check("web: e2e (build + playwright)", ["npm", "run", "--silent", "test:e2e"], cwd=web),

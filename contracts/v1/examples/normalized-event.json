@@ -1,0 +1,13 @@
+{
+  "schema_version": "v1",
+  "event_id": "evt_123",
+  "occurred_at": "2026-01-01T10:00:00.000Z",
+  "ingested_at": "2026-01-01T10:00:01.000Z",
+  "user_id": "user_1",
+  "source_ip": "192.0.2.10",
+  "event_type": "authentication",
+  "action": "login",
+  "resource": "portal",
+  "status": "failed",
+  "metadata": {}
+}

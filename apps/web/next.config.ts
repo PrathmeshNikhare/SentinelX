@@ -8,8 +8,8 @@ if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  // pg is a Node-only driver; keep it out of the server bundle.
-  serverExternalPackages: ["pg"],
+  // Node-only drivers (pg, native librdkafka binding); keep them out of the server bundle.
+  serverExternalPackages: ["pg", "@confluentinc/kafka-javascript"],
 };
 
 export default nextConfig;

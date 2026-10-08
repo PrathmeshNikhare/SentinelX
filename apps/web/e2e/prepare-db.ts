@@ -1,10 +1,12 @@
-// Recreates the throwaway E2E database before the healthy server starts (run by playwright.config.ts).
+// Recreates the throwaway E2E database and ensures the E2E Kafka topic before the healthy server starts
+// (run by playwright.config.ts).
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { createAnalyst, enableAppRoleLogin } from "../src/db/admin.ts";
 import { runMigrations } from "../src/db/migrate.ts";
+import { ensureTopic, parseBrokers } from "../src/ingest/kafka.ts";
 import { seedReferenceData } from "../src/db/seed.ts";
-import { E2E_ANALYST, E2E_DATABASE, e2eAppUrl, e2eOwnerUrl, ownerAdminUrl } from "./support.ts";
+import { E2E_ANALYST, E2E_DATABASE, E2E_EVENTS_TOPIC, e2eAppUrl, e2eOwnerUrl, kafkaBrokers, ownerAdminUrl } from "./support.ts";
 
 async function adminQuery(text: string): Promise<void> {
   const client = new pg.Client({ connectionString: ownerAdminUrl() });
@@ -29,4 +31,5 @@ try {
   await pool.end();
 }
 await enableAppRoleLogin(e2eOwnerUrl(), e2eAppUrl());
+await ensureTopic(parseBrokers(kafkaBrokers()), E2E_EVENTS_TOPIC);
 console.log(JSON.stringify({ event: "e2e.database_ready", database: E2E_DATABASE }));

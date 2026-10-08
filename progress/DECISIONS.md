@@ -172,6 +172,7 @@ Chromium only. Pure logic (password hashing, session tokens, ID validation) has 
 - The shadcn 4 CLI generates components that import `cn` from the npm package `cn`, published by shadcn himself from the `shadcn-ui/cn` repo. Checked: no install scripts, no dependencies. Kept and pinned.
 - The CLI also added `shadcn` (published the day before) and `tw-animate-css` only for CSS imports our five components don't use; both were removed (−225 packages). Add components later with `npx shadcn@4.21.0 add <name>`.
 - `eslint-plugin-react` (via `eslint-config-next`) calls `context.getFilename()`, which ESLint 10 removed. Setting `settings.react.version` avoids its version detection. Probes confirmed the Next.js and hooks rules fire. Lint runs with `--max-warnings 0`.
+- `eslint-plugin-import` (via `eslint-config-next`) declares ESLint ≤9 as its peer, so npm prints an ERESOLVE override warning on install. It is harmless: its rules load under ESLint 10.
 - `npm audit --omit=dev`: 0 vulnerabilities. Dev-only advisories remain in drizzle-kit (esbuild ≤0.24.2, D-033) and in `@next/eslint-plugin-next`'s `fast-glob` → `braces` (no patched `braces` exists; it only expands our own lint globs).
 - Next.js reads the repo-root `.env` through `next.config.ts`. App code must not import `src/db/env.ts`: Turbopack treats `new URL(".env", import.meta.url)` as an asset and would bundle the file (the build failed on it).
 - Error logging never includes query parameters: Drizzle errors carry bound values (emails, token hashes, password hashes), so `describeError` keeps only the SQL text and driver code. The session check returns `ok | anonymous | unavailable` instead of throwing, because Next renders pages in parallel with layouts.
@@ -179,11 +180,65 @@ Chromium only. Pure logic (password hashing, session tokens, ID validation) has 
 ### D-039 — Commit Next.js-generated `apps/web/AGENTS.md` and `CLAUDE.md` (Phase 02)
 `next dev` (Next 16, `node_modules/next/dist/server/lib/generate-agent-files.js`) writes `apps/web/AGENTS.md` (a managed block telling coding agents to read the bundled Next.js 16 docs in `node_modules/next/dist/docs/` before writing code) and `apps/web/CLAUDE.md` (`@AGENTS.md`) when it detects an AI coding agent. The content was reviewed: it is accurate (Next 16 renamed `middleware.ts` to `proxy.ts`, etc.) and does not conflict with the root `CLAUDE.md`. The files are committed so this agent instruction is visible and reviewed, and so `next dev` does not leave the tree dirty. Do not hand-edit the managed block; `next dev` rewrites it.
 
+### D-040 — Kafka client: `@confluentinc/kafka-javascript` (Phase 03; resolves the open Phase 03 decision)
+- `kafkajs` has had no release since 2.2.4 (2023-02-27). Confluent's official librdkafka binding exposes a KafkaJS-compatible API and is actively released; 1.10.1 (2026-09-10) is pinned.
+- Its install script (`node-pre-gyp install --fallback-to-build`) downloads a prebuilt native binary from Confluent's GitHub releases; on Windows it installed without a compiler.
+- It is listed in `serverExternalPackages`. Client settings:
+  - `broker.address.family=v4`: librdkafka otherwise tries `::1` first while Docker publishes on 127.0.0.1, costing about 2 s and an error per connect;
+  - client logger `NOTHING`: failures surface as rejected promises, logged once by our code.
+- Verified by a produce→consume round trip against the Compose broker.
+
+### D-041 — `POST /api/events` authentication (Phase 03; resolves the Phase 02 handoff question)
+- The endpoint accepts either a valid analyst session or `Authorization: Bearer <INGEST_API_TOKEN>`. The token is for non-browser producers, starting with the demo generator, so every event, demo included, passes the same validation path.
+- Comparison: SHA-256 of both values plus `timingSafeEqual`. Token auth is disabled when `INGEST_API_TOKEN` is empty, and refused (logged as misconfiguration) when the token is shorter than 32 characters (D-025).
+- The token path never touches PostgreSQL, so ingestion keeps working while the database is down (D-014).
+
+### D-042 — Event contracts: zod source, generated JSON Schema (Phase 03; refines D-011)
+- The TypeScript zod schemas in `apps/web/src/contracts/` are the source of truth.
+- `npm run contracts:generate` writes language-neutral JSON Schema (draft 2020-12) to `contracts/v1/security-event.schema.json` (API body) and `contracts/v1/normalized-event.schema.json` (Kafka message).
+- A unit test fails if the committed files drift from the zod schemas. Examples in `contracts/v1/examples/` are validated in tests.
+- Python consumers (Phase 04) validate against the generated JSON Schema or a Pydantic model with a contract test on the same examples.
+- zod 4.6.5 is pinned (boundary validation is required by CLAUDE.md; it also gives typed parsing and field-level error paths for 400 responses).
+
+### D-043 — Event semantics, normalization and the Kafka message (Phase 03)
+API body: a strict object (unknown fields rejected) with:
+- `event_id`: `[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}`;
+- `timestamp`: ISO 8601 with offset;
+- `user_id`: `[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}`;
+- `source_ip`: IPv4 or IPv6;
+- `event_type`: `authentication | process | file_access | privilege_change | network`;
+- `action`: `[A-Za-z0-9_.-]{1,64}`;
+- `resource`: 1–512 characters, no control characters;
+- `status`: `success | failed`;
+- optional `metadata`: JSON object, keys 1–64 characters, no `constructor`/`prototype` keys, serialized at most 4 KiB. A `__proto__` key anywhere in the body is rejected by the JSON reviver in the route (zod 4 would silently drop it).
+
+Request limits: `application/json` only (else 415); body at most 16 KiB (else 413).
+
+Normalization (pure, `now` injected):
+- `timestamp` → `occurred_at` in UTC ISO (`…Z`); more than 5 minutes in the future is rejected;
+- `user_id` and `action` are lowercased (one identity per user for correlation);
+- IPv6 is canonicalized; IPv4-mapped IPv6 (`::ffff:a.b.c.d`) becomes IPv4;
+- `resource` is trimmed;
+- `schema_version: "v1"` and `ingested_at` are added.
+
+Kafka message on topic `security-events`: key `user_id` (D-014), JSON value = the normalized event, headers `schema-version: v1` and `content-type: application/json`. The API answers `202 {event_id, status: "accepted"}`, or `503` when Kafka does not acknowledge within 8 s. Deduplication stays in the detection worker (D-014).
+
+### D-044 — Deterministic demo generator (Phase 03)
+- Scenarios A/B/C (docs/12) live in `fixtures/scenarios/scenario-{a,b,c}.json` as events with `offset_seconds`.
+- `npm run demo:send -- <A|B|C> [--base <ISO>] [--url <base-url>]` expands a scenario and posts each event to `POST /api/events` with `INGEST_API_TOKEN`.
+- The default base is now minus the scenario's largest offset, so the last event lands "now" (inside the 5-minute skew window) and the overview's 24 h counts include it.
+- `event_id = demo-<scenario>-<base as yyyymmddThhmmssZ>-<nn>`: the same scenario and base always yield the same events, and re-sending yields the same IDs (the worker dedupes them). Fixture IPs follow D-032 (RFC 1918/5737 only).
+
+### D-045 — Test traffic never uses the production topic (Phase 03)
+- The producer topic comes from `KAFKA_EVENTS_TOPIC` (default `security-events`).
+- The Kafka integration tests publish to `security-events-test` and the E2E servers to `security-events-e2e`; both topics are created on demand by `ensureTopic`.
+- Only real ingestion (including `npm run demo:send`) reaches `security-events`, so the Phase 04 worker never consumes test noise. Kafka has no volume (D-023): recreating the broker container empties every topic.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|
 | ~~Auth/session implementation and password hashing algorithm~~ — resolved by D-034 | 02 |
-| TypeScript Kafka client (kafkajs maintenance status vs Confluent's kafkajs-compatible client) | 03 |
+| ~~TypeScript Kafka client~~ — resolved by D-040 | 03 |
 | Isolation Forest feature list and alert threshold | 04 |
 | Correlation window and grouping keys | 05 |
 | Ollama model confirmation (`llama3.2:3b` default) and structured-output mode | 06 |

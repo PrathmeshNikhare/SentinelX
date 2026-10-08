@@ -95,7 +95,6 @@ test.describe("healthy server", () => {
     expect((await page.request.get("/api/incidents/not-an-id")).status()).toBe(404);
 
     const placeholders: [string, string, string][] = [
-      ["POST", "/api/events", "03"],
       ["POST", `/api/incidents/${UNKNOWN_INCIDENT}/investigate`, "06-08"],
       ["GET", "/api/investigations/run_0000000000000000", "06-08"],
     ];

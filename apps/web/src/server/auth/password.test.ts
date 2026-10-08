@@ -3,7 +3,7 @@ import { hashPassword, MIN_PASSWORD_LENGTH, passwordPolicyError, verifyPassword 
 
 const PASSWORD = "correct horse battery staple";
 
-describe("password hashing", () => {
+describe("password hashing", { timeout: 30_000 }, () => {
   it("produces a salted scrypt hash that verifies only the right password", async () => {
     const stored = await hashPassword(PASSWORD);
     expect(stored).toMatch(/^scrypt\$131072\$8\$1\$[A-Za-z0-9+/=]{24}\$[A-Za-z0-9+/=]{44}$/);
