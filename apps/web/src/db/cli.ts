@@ -4,8 +4,8 @@
 // Logs one JSON line per run; never logs connection strings or passwords.
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { AI_TOOLS_ROLE, APP_ROLE, createAnalyst, enableRoleLogin } from "./admin.ts";
-import { aiToolsDatabaseUrl, appDatabaseUrl, databaseUrl, requireEnv } from "./env.ts";
+import { AI_TOOLS_ROLE, AI_WRITER_ROLE, APP_ROLE, createAnalyst, enableRoleLogin } from "./admin.ts";
+import { aiToolsDatabaseUrl, aiWriterDatabaseUrl, appDatabaseUrl, databaseUrl, requireEnv } from "./env.ts";
 import { runMigrations } from "./migrate.ts";
 import { seedReferenceData } from "./seed.ts";
 
@@ -35,7 +35,8 @@ async function main([command, ...args]: string[]): Promise<void> {
     case "roles":
       await enableRoleLogin(databaseUrl(), appDatabaseUrl(), APP_ROLE);
       await enableRoleLogin(databaseUrl(), aiToolsDatabaseUrl(), AI_TOOLS_ROLE);
-      log({ event: "db.roles", status: "ok", roles: [APP_ROLE, AI_TOOLS_ROLE], login: true });
+      await enableRoleLogin(databaseUrl(), aiWriterDatabaseUrl(), AI_WRITER_ROLE);
+      log({ event: "db.roles", status: "ok", roles: [APP_ROLE, AI_TOOLS_ROLE, AI_WRITER_ROLE], login: true });
       return;
     case "create-analyst": {
       const [email, name] = args;

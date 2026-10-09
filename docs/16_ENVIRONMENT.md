@@ -95,12 +95,14 @@ In `services/detection`, train the model once (`python -m sentinelx_detection.tr
 2. Make sure Ollama is running with `OLLAMA_MODEL` pulled (`ollama pull llama3.2:3b`).
 3. In `services/ai`, run `python -m sentinelx_ai`; it serves on `127.0.0.1:8000`.
 
-The agent tools (Phase 07) need `AI_TOOLS_DATABASE_URL` and `npm run db:roles`. Their integration tests create and drop their own `sentinelx_ai_tools_test_*` database. Leave `LANGSMITH_TRACING`/`LANGCHAIN_TRACING_V2` unset: the service refuses to start when they are `true` (D-060).
+The service needs `AI_TOOLS_DATABASE_URL` and `AI_WRITER_DATABASE_URL` (both enabled by `npm run db:roles`); it refuses to start otherwise, and at startup marks runs left unfinished by a previous process as failed (D-065). The integration tests create and drop their own `sentinelx_ai_test_*` databases.
+
+Investigation demo (Phase 08): run the web app and the AI service with the same `AI_SERVICE_TOKEN`, open an incident, press **Investigate**, and reload. `GET /api/investigations/<run id>` returns the status, verdict, trace and evidence. A run of the scenario A incident took about 60 s on the reference machine. Leave `LANGSMITH_TRACING`/`LANGCHAIN_TRACING_V2` unset: the service refuses to start when they are `true` (D-060).
 
 The first generation after Ollama loads the model took about 40 s on the reference machine, and warm calls about 5–7 s. See `services/ai/README.md`.
 
 ## Database
-`npm run db:migrate` and `npm run db:seed` (in `apps/web`) connect with `DATABASE_URL` from the repo-root `.env` as the owner role. Both are idempotent. After editing `src/db/schema.ts`, run `npm run db:generate` and commit the new file in `apps/web/drizzle/`; `verify.py` fails on schema drift. `npm run test:kafka` produces and consumes on the isolated `security-events-test` topic; `npm run test:db` creates and drops its own `sentinelx_test_*` database; `npm run test:e2e` does the same with `sentinelx_e2e`. `npm run db:roles` enables LOGIN for `sentinelx_app` and `sentinelx_ai_tools` with the passwords in `APP_DATABASE_URL` and `AI_TOOLS_DATABASE_URL` (D-061). Add `AI_TOOLS_DATABASE_URL` from `.env.example` to an existing `.env` before running it.
+`npm run db:migrate` and `npm run db:seed` (in `apps/web`) connect with `DATABASE_URL` from the repo-root `.env` as the owner role. Both are idempotent. After editing `src/db/schema.ts`, run `npm run db:generate` and commit the new file in `apps/web/drizzle/`; `verify.py` fails on schema drift. `npm run test:kafka` produces and consumes on the isolated `security-events-test` topic; `npm run test:db` creates and drops its own `sentinelx_test_*` database; `npm run test:e2e` does the same with `sentinelx_e2e`. `npm run db:roles` enables LOGIN for `sentinelx_app`, `sentinelx_ai_tools` and `sentinelx_ai_writer` with the passwords in `APP_DATABASE_URL`, `AI_TOOLS_DATABASE_URL` and `AI_WRITER_DATABASE_URL` (D-061, D-065). Add the AI URLs from `.env.example` to an existing `.env` before running it.
 
 ## Troubleshooting
 - `docker compose` errors with `set POSTGRES_USER in .env`: copy `.env.example` to `.env`.

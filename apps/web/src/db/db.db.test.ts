@@ -315,13 +315,6 @@ describe("role permissions", () => {
   it("sentinelx_ai_writer can append evidence", async () => {
     expect(await asRole("sentinelx_ai_writer", insertEvidence())).toBeNull();
   });
-
-  it("sentinelx_ai_writer cannot log in until Phase 08 enables it (app and tools roles may, via db:roles)", async () => {
-    const result = await db.execute<{ rolcanlogin: boolean }>(
-      sql`SELECT rolcanlogin FROM pg_roles WHERE rolname = 'sentinelx_ai_writer'`,
-    );
-    expect(result.rows).toEqual([{ rolcanlogin: false }]);
-  });
 });
 
 describe("analyst sessions (D-034)", () => {

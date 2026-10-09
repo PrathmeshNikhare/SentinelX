@@ -1,4 +1,5 @@
-// Phase 02 exit: the UI runs; auth boundary; empty, not-found, populated and degraded states; API 401/501/503.
+// Phase 02 exit: the UI runs; auth boundary; empty, not-found, populated and degraded states; API 401/404/503.
+// Phase 08: investigation endpoints (AI service unreachable here; the live graph is tested in services/ai).
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 import { DEGRADED_URL, E2E_ANALYST, HEALTHY_URL, e2eOwnerUrl } from "./support.ts";
@@ -87,7 +88,7 @@ test.describe("healthy server", () => {
     }
   });
 
-  test("API serves real data and 501 placeholders for later phases", async ({ page }) => {
+  test("API serves real data and 404 for unknown investigation targets", async ({ page }) => {
     await signIn(page);
     await expect(page).toHaveURL(`${HEALTHY_URL}/`);
     const list = await page.request.get("/api/incidents");
@@ -95,14 +96,16 @@ test.describe("healthy server", () => {
     expect(await list.json()).toEqual({ incidents: [] });
     expect((await page.request.get("/api/incidents/not-an-id")).status()).toBe(404);
 
-    const placeholders: [string, string, string][] = [
-      ["POST", `/api/incidents/${UNKNOWN_INCIDENT}/investigate`, "06-08"],
-      ["GET", "/api/investigations/run_0000000000000000", "06-08"],
+    const unknown: [string, string][] = [
+      ["POST", `/api/incidents/${UNKNOWN_INCIDENT}/investigate`],
+      ["POST", "/api/incidents/not-an-id/investigate"],
+      ["GET", "/api/investigations/run_0000000000000000"],
+      ["GET", "/api/investigations/not-a-run"],
     ];
-    for (const [method, path, phase] of placeholders) {
+    for (const [method, path] of unknown) {
       const response = await page.request.fetch(path, { method });
-      expect(response.status(), `${method} ${path}`).toBe(501);
-      expect(await response.json()).toMatchObject({ error: { code: "not_implemented", phase } });
+      expect(response.status(), `${method} ${path}`).toBe(404);
+      expect(await response.json()).toMatchObject({ error: { code: "not_found" } });
     }
   });
 
@@ -177,6 +180,74 @@ test.describe("healthy server", () => {
       headers: { "content-type": "application/json" },
     });
     expect(extra.status()).toBe(400); // only "status" may be changed
+  });
+
+  test("investigation: unavailable AI service, then a persisted run with trace and evidence (D-015)", async ({ page }) => {
+    await signIn(page);
+    await expect(page).toHaveURL(`${HEALTHY_URL}/`);
+    const listed = (await (await page.request.get("/api/incidents")).json()) as { incidents: { id: string }[] };
+    const id = listed.incidents[0]?.id;
+    if (!id) throw new Error("expected the incident created earlier");
+
+    const refused = await page.request.post(`/api/incidents/${id}/investigate`);
+    expect(refused.status()).toBe(503);
+    expect(await refused.json()).toMatchObject({ error: { code: "unavailable" } });
+    await page.goto(`/incidents/${id}`);
+    await expect(page.getByText("No investigation yet.")).toBeVisible();
+    await page.getByRole("form", { name: "Investigation" }).getByRole("button", { name: "Investigate" }).click();
+    await expect(page.getByRole("status")).toHaveText("The AI service is unavailable. Try again later.");
+
+    // A run as the AI service persists it (writer role), read back through the web role.
+    const client = new pg.Client({ connectionString: e2eOwnerUrl() });
+    await client.connect();
+    let runId: string;
+    let evidenceId: string;
+    try {
+      runId = await insertReturningId(
+        client,
+        `INSERT INTO investigation_runs (incident_id, status, verdict_json, raw_output_json, model_name, prompt_version,
+                                         started_at, completed_at)
+         VALUES ($1, 'completed', $2, '{"attempts": []}', 'e2e-model', 'investigation-v1', now(), now()) RETURNING id`,
+        [id, { verdict: "Possible Account Compromise", confidence: 0.7, severity: "HIGH" }],
+      );
+      evidenceId = await insertReturningId(
+        client,
+        `INSERT INTO evidence (investigation_run_id, source_type, source_id, claim, data_json)
+         VALUES ($1, 'ip_reputation', '203.0.113.45', 'IP 203.0.113.45 local reputation malicious', '{}') RETURNING id`,
+        [runId],
+      );
+      await client.query(
+        `INSERT INTO investigation_trace (investigation_run_id, step_index, action_type, action_origin, tool_name, evidence_ids_json)
+         VALUES ($1, 0, 'load_incident', NULL, NULL, '[]'), ($1, 1, 'tool_call', 'fallback', 'get_ip_reputation', $2)`,
+        [runId, JSON.stringify([evidenceId])],
+      );
+    } finally {
+      await client.end();
+    }
+
+    const response = await page.request.get(`/api/investigations/${runId}`);
+    expect(response.status()).toBe(200);
+    const body = (await response.json()) as { investigation: Record<string, unknown> };
+    expect(body).toMatchObject({
+      investigation: {
+        id: runId,
+        incidentId: id,
+        status: "completed",
+        requiresReview: false,
+        verdict: { verdict: "Possible Account Compromise" },
+        trace: [
+          { stepIndex: 0, actionType: "load_incident", actionOrigin: null },
+          { stepIndex: 1, actionType: "tool_call", actionOrigin: "fallback", toolName: "get_ip_reputation", evidenceIds: [evidenceId] },
+        ],
+        evidence: [{ id: evidenceId, sourceType: "ip_reputation", sourceId: "203.0.113.45" }],
+      },
+    });
+    expect(body.investigation).not.toHaveProperty("rawOutput"); // audit copy stays server-side (D-019)
+
+    await page.goto(`/incidents/${id}`);
+    const latest = page.getByTestId("latest-investigation");
+    await expect(latest).toContainText(runId);
+    await expect(latest).toContainText("completed");
   });
 
   test("sign-out revokes the session server-side", async ({ page, browser }) => {

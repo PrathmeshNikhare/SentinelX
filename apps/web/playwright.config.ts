@@ -2,9 +2,9 @@
 // healthy (3100, throwaway sentinelx_e2e database) and degraded (3101, unreachable database, Kafka reachable).
 // Both publish to the isolated `security-events-e2e` topic.
 import { defineConfig, devices } from "@playwright/test";
-import { DEGRADED_URL, E2E_EVENTS_TOPIC, E2E_INGEST_TOKEN, HEALTHY_URL, e2eAppUrl, unreachableAppUrl } from "./e2e/support.ts";
+import { DEGRADED_URL, E2E_AI_SERVICE, E2E_EVENTS_TOPIC, E2E_INGEST_TOKEN, HEALTHY_URL, e2eAppUrl, unreachableAppUrl } from "./e2e/support.ts";
 
-const ingestEnv = { INGEST_API_TOKEN: E2E_INGEST_TOKEN, KAFKA_EVENTS_TOPIC: E2E_EVENTS_TOPIC };
+const ingestEnv = { INGEST_API_TOKEN: E2E_INGEST_TOKEN, KAFKA_EVENTS_TOPIC: E2E_EVENTS_TOPIC, ...E2E_AI_SERVICE };
 
 export default defineConfig({
   testDir: "./e2e",

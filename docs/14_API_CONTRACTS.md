@@ -3,7 +3,7 @@
 Contracts are versioned before cross-service implementation.
 
 ## Browser-facing API (Next.js)
-All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error": {"code", "message", ...}}`: `401 unauthorized` (no/invalid/revoked session), `404 not_found`, `501 not_implemented` (with `phase`), `503 unavailable` (database unreachable).
+All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error": {"code", "message", ...}}`: `401 unauthorized` (no/invalid/revoked session), `404 not_found`, `409` conflicts, `503 unavailable` (database or AI service unreachable).
 
 | Route | Status (Phase 02) |
 |---|---|
@@ -11,8 +11,8 @@ All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error
 | `GET /api/incidents/:id` | implemented: `{incident: {..., events: [...]}}`; malformed or unknown id → 404 |
 | `PATCH /api/incidents/:id` | implemented (Phase 05, D-054): body exactly `{"status": "open"\|"investigating"\|"resolved"}` → 200 `{incident: {id, status}}`; 400 bad body, 404, 409 `invalid_transition` with `current`, 413, 415 |
 | `POST /api/events` | implemented (Phase 03): see below |
-| `POST /api/incidents/:id/investigate` | 501, Phases 06–08 |
-| `GET /api/investigations/:id` | 501, Phases 06–08 |
+| `POST /api/incidents/:id/investigate` | implemented (Phase 08, D-069): 202 `{investigation_run_id}`; 404 unknown incident; 409 `investigation_in_progress`; 503 AI service unavailable |
+| `GET /api/investigations/:id` | implemented (Phase 08, D-069): `{investigation: {id, incidentId, status, requiresReview, verdict, validationErrors, modelName, promptVersion, errorMessage, createdAt, startedAt, completedAt, trace: [...], evidence: [...]}}`; 404 malformed/unknown |
 
 `POST /api/events`
 ```json
@@ -42,7 +42,7 @@ Bound to `127.0.0.1:8000`, called only by the Next.js server. Every route except
 |---|---|
 | `GET /health` | public liveness `{"status": "ok"}` |
 | `GET /v1/ready` | 200 `{"status": "ready", "model"}`, or 503 when Ollama is unreachable or the model is missing |
-| `POST /v1/investigations` | body `contracts/v1/investigation-request.schema.json`; 400 on contract violation (paths and types only); 501 `phase: "08"` until the graph exists; becomes 202 `investigation-accepted` in Phase 08 |
+| `POST /v1/investigations` | body `contracts/v1/investigation-request.schema.json`; 400 on contract violation (paths and types only); 202 `investigation-accepted` and the graph runs in the background (D-064); 404 unknown incident; 409 `investigation_in_progress`; 503 database unavailable |
 
 Verdicts follow `contracts/v1/verdict.schema.json` (D-059). The Ollama adapter constrains generation with that schema and re-validates every answer.
 

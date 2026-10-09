@@ -20,6 +20,8 @@ def settings() -> Settings:
         ollama_base_url="http://ollama.invalid",
         ollama_model="test-model",
         ollama_timeout_seconds=5,
+        tools_database_url="postgresql://sentinelx_ai_tools:x@db.invalid/none",
+        writer_database_url="postgresql://sentinelx_ai_writer:x@db.invalid/none",
     )
 
 

@@ -298,6 +298,13 @@ TOOL_NAMES: Final = (
     "get_mitre_technique",
     "search_security_knowledge",
 )
+TOOL_INPUTS: Final[dict[str, type[ToolInput]]] = {
+    "get_user_history": UserHistoryInput,
+    "get_ip_reputation": IpReputationInput,
+    "get_related_logs": RelatedLogsInput,
+    "get_mitre_technique": MitreTechniqueInput,
+    "search_security_knowledge": KnowledgeSearchInput,
+}
 
 
 def _tool[In: ToolInput](
@@ -318,11 +325,14 @@ def _tool[In: ToolInput](
     )
 
 
-def build_tools(db: ToolDatabase, retriever: KnowledgeRetriever) -> list[StructuredTool]:
-    """Usage: `build_tools(ToolDatabase(AI_TOOLS_DATABASE_URL), retriever)`."""
+def build_tools(db: ToolDatabase, retriever: KnowledgeRetriever | None) -> list[StructuredTool]:
+    """Usage: `build_tools(ToolDatabase(AI_TOOLS_DATABASE_URL), retriever)`.
+
+    Without a retriever (until Phase 09 supplies Qdrant) knowledge search is not offered at all (D-067).
+    """
     db_timeout = CONNECT_TIMEOUT_SECONDS + STATEMENT_TIMEOUT_MS / 1000
     window = f"Window at most {MAX_WINDOW.days} days; limit 1-{MAX_ROWS} (default {DEFAULT_ROWS}); newest first."
-    return [
+    database_tools = [
         _tool(
             "get_user_history",
             f"Security events for one monitored user between start_time and end_time (UTC). {window}",
@@ -351,11 +361,14 @@ def build_tools(db: ToolDatabase, retriever: KnowledgeRetriever) -> list[Structu
             lambda a: get_mitre_technique(db, a),
             db_timeout,
         ),
-        _tool(
-            "search_security_knowledge",
-            f"Semantic search over approved security knowledge. top_k 1-{MAX_TOP_K}. Hits carry document IDs.",
-            KnowledgeSearchInput,
-            lambda a: search_security_knowledge(retriever, a),
-            KNOWLEDGE_TIMEOUT_SECONDS,
-        ),
     ]
+    if retriever is None:
+        return database_tools
+    knowledge = _tool(
+        "search_security_knowledge",
+        f"Semantic search over approved security knowledge. top_k 1-{MAX_TOP_K}. Hits carry document IDs.",
+        KnowledgeSearchInput,
+        lambda a: search_security_knowledge(retriever, a),
+        KNOWLEDGE_TIMEOUT_SECONDS,
+    )
+    return [*database_tools, knowledge]

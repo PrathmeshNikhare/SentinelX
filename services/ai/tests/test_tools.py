@@ -105,6 +105,11 @@ def test_registry_is_exactly_the_five_read_only_tools() -> None:
         schema = tool.args_schema.model_json_schema()  # type: ignore[union-attr]
         assert schema["additionalProperties"] is False, tool.name
         assert tool.description
+        assert tool.args_schema is tools.TOOL_INPUTS[tool.name]
+
+
+def test_knowledge_search_is_not_offered_without_a_retriever() -> None:
+    assert [t.name for t in build_tools(FakeDb(), None)] == [n for n in TOOL_NAMES if n != "search_security_knowledge"]
 
 
 # --- input bounds ----------------------------------------------------------------------------------------------------

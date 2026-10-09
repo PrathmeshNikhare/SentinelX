@@ -24,3 +24,6 @@ export const appDatabaseUrl = (): string => requireEnv("APP_DATABASE_URL");
 
 /** SELECT-only agent tools connection string (D-061). */
 export const aiToolsDatabaseUrl = (): string => requireEnv("AI_TOOLS_DATABASE_URL");
+
+/** Investigation persistence connection string: runs, trace and evidence (D-065). */
+export const aiWriterDatabaseUrl = (): string => requireEnv("AI_WRITER_DATABASE_URL");

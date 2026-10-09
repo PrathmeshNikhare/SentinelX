@@ -12,7 +12,10 @@ from sentinelx_ai.llm import LlmInvalidOutput, OllamaClient
 
 pytestmark = pytest.mark.integration
 
-SYSTEM = "You are a security analyst. Use only the evidence provided. Cite evidence IDs exactly as given."
+SYSTEM = (
+    "You are a security analyst. Use only the evidence provided. Cite evidence IDs exactly as given. "
+    "confidence is a number from 0.0 to 1.0, not a percentage."  # Ollama does not enforce numeric bounds (D-068)
+)
 USER = (
     "Evidence ev_1a2b3c4d5e6f7a8b: 5 failed logins for alice from 203.0.113.45 (malicious) within 2 minutes, "
     "then a successful login.\nEvidence ev_9f8e7d6c5b4a3f2e: encoded, hidden-window PowerShell on alice's workstation."

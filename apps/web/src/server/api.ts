@@ -10,10 +10,6 @@ import { logError } from "./log.ts";
 export const apiError = (status: number, code: string, message: string, extra: Record<string, unknown> = {}) =>
   NextResponse.json({ error: { code, message, ...extra } }, { status });
 
-/** Placeholder for endpoints owned by a later phase (D-036). */
-export const notImplemented = (phase: string) =>
-  apiError(501, "not_implemented", `This endpoint is implemented in Phase ${phase}.`, { phase });
-
 /** Authenticates the request from the session cookie: 401 without a valid session, 503 if the database is down. */
 export async function withSession(
   route: string,

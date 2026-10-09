@@ -18,6 +18,8 @@ function withDatabase(url: string, database: string): string {
 }
 
 export const E2E_DATABASE = "sentinelx_e2e";
+/** No AI service runs during E2E: a closed port exercises the unavailable path deterministically (Phase 08). */
+export const E2E_AI_SERVICE = { AI_SERVICE_URL: "http://127.0.0.1:1", AI_SERVICE_TOKEN: "e2e-ai-service-token-0123456789abcdefghij" };
 export const HEALTHY_URL = "http://localhost:3100";
 export const DEGRADED_URL = "http://localhost:3101";
 

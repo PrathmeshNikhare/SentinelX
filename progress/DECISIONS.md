@@ -405,6 +405,41 @@ Whether the cited IDs actually exist is checked in Phase 10.
 ### D-063 — Knowledge retriever interface (Phase 07; implements D-026)
 `KnowledgeRetriever.search(query, top_k, timeout_seconds) -> Sequence[KnowledgeHit]`. Implementations honor the 5 s timeout and raise `TimeoutError` or `ConnectionError`, which the tool maps to `ToolError`. `KnowledgeHit` carries `document_id` (`kd_` + 16 hex, i.e. `knowledge_documents.id`, D-018), `source`, `title` (≤ 300), `snippet` (≤ 1500) and a finite `score`. Phase 07 tests use a fake. Phase 09 supplies the Qdrant implementation and decides whether hits must be checked against `knowledge_documents`.
 
+### D-064 — Investigation flow and graph (Phase 08; implements D-015, D-017)
+- Pin: `langgraph` 1.2.14 with `langgraph-checkpoint` 4.2.0, `langgraph-prebuilt` 1.1.0, `langgraph-sdk` 0.4.6 and `ormsgpack` 1.12.2. `langgraph-sdk` requires `websockets<17`, so `websockets` moved from 17.2 to 16.1.1. No checkpointer is used: runs are not resumed, and state lives in the trace.
+- The AI service owns run creation (the web role cannot write `investigation_runs`, D-031). `POST /v1/investigations` takes a per-incident advisory lock and inserts a `queued` run unless one is already queued or running, then returns `202` with `investigation_run_id` and schedules the graph as a FastAPI background task. Otherwise: `404` for an unknown incident, `409 investigation_in_progress`, or `503` when the database or role is unavailable.
+- Graph (docs/05): `load_incident → analyze_evidence → choose_next_action → execute_tool → store_evidence → analyze_evidence … → build_verdict → validate_verdict`. At most 8 tool executions (`MAX_STEPS`). The LangGraph recursion limit of 42 is a safety net above that.
+- `choose_next_action`: the LLM proposes `{action, arguments}` (an action enum including `finish`; no free-text rationale, docs/15). The proposal is rejected and replaced by the next unexecuted fallback-plan action when it fails `TOOL_INPUTS[tool]` validation, names a tool that is not offered, or repeats an executed action. An exhausted plan ends the loop. After `LlmUnavailable` the run stops asking the LLM for actions; `LlmInvalidOutput` falls back for that step only.
+- Trace rows (append-only, contiguous `step_index`): `load_incident` (counts plus the fallback plan), `choose_action` (origin, the proposal (cut to its action name when over 2,000 characters), the selected action, the reason), `tool_call` (origin, canonical arguments, ok/error, claims, evidence IDs, retrieval refs), `build_verdict`, `validate_verdict`.
+- Live on `llama3.2:3b` (reference machine), for scenario A and the dev demo incident: 58–61 s per run. The model's first four proposals were valid; it then repeated actions and the fallback plan filled the remaining budget.
+
+### D-065 — Writer role and run lifecycle (Phase 08; refines D-031)
+- `npm run db:roles` also enables LOGIN for `sentinelx_ai_writer` from `AI_WRITER_DATABASE_URL`. All three non-owner roles can now log in.
+- `Store` connects per operation with a 5 s statement timeout, `TimeZone=UTC` and IPv4 for `localhost`. It checks `current_user = sentinelx_ai_writer` and refuses any other role. Trace and evidence are INSERT-only (grants).
+- `python -m sentinelx_ai` refuses to start unless both database URLs are set, the tools URL connects as the tools role and the writer URL as the writer role. At startup it marks runs left `queued`/`running` by a previous process as `failed` with `requires_review=true` (`ponytail:` single instance, D-023).
+- A crash inside a run (database error, missing incident) finishes it as `failed` with `investigation failed (<ExceptionType>)`. No exception text is stored or logged.
+
+### D-066 — Investigation evidence and the fallback plan (Phase 08; implements D-018)
+- `load_incident` stores the incident's newest 20 linked events (with their rule names) and its 10 highest-risk alerts as `event`/`alert` evidence. Each tool result becomes evidence: one row per call, or one row per hit for knowledge search. Source IDs: user ID (`user_history`), the filter scope (`related_logs`), the IP, the technique ID, the `kd_` document ID.
+- Claims are written by code (`evidence.py`), never by the model. Log-derived fields are clipped to 120 characters with whitespace collapsed, so injected newlines cannot forge extra `[ev_…]` prompt lines. Prompts show `[ev_id] (source_type) claim` only; `data_json` keeps the bounded source data for audit and the UI.
+- Fallback plan, in order: user history (24 h before the first event to 1 min after the last, at most 7 days), reputation of up to 3 incident IPs (primary first), related logs for the primary IP, and up to 4 candidate ATT&CK techniques from the incident's rule hits (`RULE_TECHNIQUES`, e.g. `brute_force_attempts → T1110`, `suspicious_powershell → T1059.001`). The map is a lookup hint, not a verdict, and duplicates no detection logic.
+
+### D-067 — No knowledge search until a retriever exists (Phase 08; refines D-063)
+`build_tools(db, None)` omits `search_security_knowledge`, so the agent is never offered a tool that always returns nothing. Phase 09 passes the Qdrant retriever and the tool appears in `available_tools` with no graph change.
+
+### D-068 — Verdict handling in Phase 08 (implements D-019 partially)
+- Live finding: Ollama's `format` does not enforce numeric bounds. `llama3.2:3b` sometimes returned `confidence` above 1 (a percentage) twice in a row, so the run went to review. Two fixes: the verdict prompt states the 0.0–1.0 range, and the retry names the rejected fields (`describe_validation_error` types only, never the output), because the identical prompt at temperature 0 repeats the mistake. After the change, 3 consecutive live runs completed without review. The Phase 06 live adapter test's prompt also states the range.
+- `build_verdict` makes up to 2 attempts (retry once on invalid output). Every attempt is kept in `raw_output_json.attempts` (`valid`, `error`, bounded `raw`, or the validated `output`). `verdict_json` holds only a schema-valid verdict.
+- No valid attempt: `completed`, `requires_review=true`, `validation_errors_json` lists the errors. Ollama unavailable: `failed`, `requires_review=true`, `error_message`, evidence and trace kept.
+- `validate_verdict` records `checks: ["schema"]` and `deferred_to_phase_10: ["evidence_ids", "mitre_techniques", "severity_disagreement"]`. Until Phase 10, a schema-valid verdict may cite IDs that do not exist. In both live runs every cited ID existed, but the dev-incident summary miscounted the failed logins (4 vs 5): grounding is Phase 10 work.
+
+### D-069 — Web side of investigations (Phase 08)
+- `POST /api/incidents/:id/investigate` checks the incident in the web database first (404 without calling the AI service), then calls `POST /v1/investigations` with the service token. The call uses a 5 s timeout and `redirect: "error"`, and the 202 response is validated against the `investigation-accepted` contract (zod in `src/contracts/investigation.ts`). Responses: 202 `{investigation_run_id}`, 404, 409, or 503 when the service is unreachable, misconfigured (missing token or one under 32 characters) or violates the contract.
+- `GET /api/investigations/:id` returns the run (status, `requiresReview`, verdict, validation errors, model, prompt version, timestamps), the trace by step and the evidence, as `sentinelx_app`. `raw_output_json` is not served.
+- The incident page gets an Investigate button (server action, outcome shown as a status line) and the latest run's status. The full trace, verdict and evidence UI is Phase 11.
+- E2E servers point `AI_SERVICE_URL` at a closed port: the unavailable path is deterministic, and a run inserted as the owner exercises the read path. The live graph is covered by `services/ai/tests/integration/test_investigation_live.py`.
+- The `notImplemented` helper is removed: no placeholder endpoints remain.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|

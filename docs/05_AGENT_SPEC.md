@@ -24,3 +24,6 @@ The agent chooses evidence-gathering actions. It does NOT calculate the authorit
 - dependency unavailable: preserve incident and investigation failure state.
 
 Do not request or persist hidden chain-of-thought. Persist only auditable trace metadata.
+
+## Implementation (Phase 08)
+`services/ai/sentinelx_ai/graph.py` (graph, prompts, fallback plan, `Investigator`), `store.py` (writer-role persistence), `evidence.py` (code-written claims). Decisions: D-064 (flow, trace rows), D-065 (writer role, run lifecycle), D-066 (evidence and fallback plan), D-067 (no knowledge search before Phase 09), D-068 (verdict attempts and review).

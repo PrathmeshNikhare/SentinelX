@@ -48,6 +48,8 @@ class Settings:
     ollama_base_url: str
     ollama_model: str
     ollama_timeout_seconds: float
+    tools_database_url: str  # sentinelx_ai_tools, SELECT-only (D-061)
+    writer_database_url: str  # sentinelx_ai_writer, runs/trace/evidence (D-065)
 
     @staticmethod
     def from_env() -> Settings:
@@ -65,9 +67,15 @@ class Settings:
         model = os.environ.get("OLLAMA_MODEL", "")
         if not model:
             raise ConfigError("OLLAMA_MODEL is not set (copy .env.example to .env at the repo root)")
+        urls = {name: os.environ.get(name, "") for name in ("AI_TOOLS_DATABASE_URL", "AI_WRITER_DATABASE_URL")}
+        missing = [name for name, url in urls.items() if not url]
+        if missing:
+            raise ConfigError(f"{', '.join(missing)} not set (copy from .env.example; enable with `npm run db:roles`)")
         return Settings(
             service_token=token,
             ollama_base_url=os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434",
             ollama_model=model,
             ollama_timeout_seconds=timeout,
+            tools_database_url=urls["AI_TOOLS_DATABASE_URL"],
+            writer_database_url=urls["AI_WRITER_DATABASE_URL"],
         )

@@ -10,7 +10,11 @@ FastAPI AI service (D-057). Internal only: it binds `127.0.0.1:8000`, and every 
 | `config.py` | settings from the repo-root `.env`; refuses unsafe tokens and bad timeouts (D-025) |
 | `contracts.py` | Pydantic source of `contracts/v1/{verdict,investigation-request,investigation-accepted}.schema.json` (D-059) |
 | `llm.py` | `LlmClient` protocol + `OllamaClient`: schema-constrained `/api/chat`, temperature 0, seed 42, Pydantic re-validation, typed errors (`LlmUnavailable` vs `LlmInvalidOutput`, with the raw output kept for audit) (D-056) |
-| `app.py` | `create_app()`: auth middleware before routing, JSON error shape, `GET /health`, `GET /v1/ready`, `POST /v1/investigations` (contract-validated, 501 until Phase 08) |
+| `app.py` | `create_app()`: auth middleware before routing, JSON error shape, `GET /health`, `GET /v1/ready`, `POST /v1/investigations` (202 and a background run; 404/409/503, D-064) |
+| `graph.py` | LangGraph investigation: state, nodes, LLM action proposals validated against tool schemas with a deterministic fallback plan, 8-step budget, verdict attempts, `Investigator.run` for the background task (D-064, D-066–D-068) |
+| `store.py` | persistence as `sentinelx_ai_writer`: queue/start/finish runs, load incidents, append trace and evidence, abandon unfinished runs at startup (D-065) |
+| `evidence.py` | code-written evidence claims for incident rows and tool results (D-066) |
+| `log.py` | JSON log lines |
 | `tools.py` | the five read-only agent tools as LangChain `StructuredTool`s: Pydantic input/output schemas, bounds, `sentinelx_ai_tools`-only read-only sessions, fixed `SELECT`s, the `KnowledgeRetriever` interface (D-060–D-063) |
 | `__main__.py` | `python -m sentinelx_ai` |
 
@@ -29,6 +33,7 @@ Environment (repo-root `.env`):
 - `OLLAMA_MODEL` (`llama3.2:3b`, pulled with `ollama pull llama3.2:3b`);
 - optional `OLLAMA_TIMEOUT_SECONDS` (default 120);
 - `AI_TOOLS_DATABASE_URL`: the SELECT-only tools role, enabled by `npm run db:roles` in `apps/web` (D-061);
+- `AI_WRITER_DATABASE_URL`: the investigation persistence role, also enabled by `npm run db:roles` (D-065);
 - `LANGSMITH_TRACING` / `LANGCHAIN_TRACING_V2` must not be `true` (the service refuses to start, D-060).
 
 ## Contracts
@@ -39,4 +44,6 @@ After editing `contracts.py`, run `python -m sentinelx_ai.contracts` and commit 
 - Unit tests use a fake LLM and `httpx.MockTransport`.
 - `tests/integration/test_ollama_live.py` needs Ollama running with the configured model and asserts a schema-valid verdict.
 - `tests/test_tools.py` covers tool schemas, bounds, truncation, error mapping and a static scan for forbidden capabilities, without a database.
-- `tests/integration/test_tools_db.py` needs PostgreSQL and npm. It creates a `sentinelx_ai_tools_test_*` database, migrates, seeds and runs `db:roles`, then proves the grants (writes and sensitive reads denied even in a `READ WRITE` transaction), the read-only session, the timeout, each tool's results and that injected log text comes back as plain data.
+- `tests/test_graph.py` runs the graph with an in-memory store and a scripted LLM: LLM proposals and every fallback reason, the step budget, Ollama outages, verdict retry and review, tool failures, injected newlines, crashes.
+- `tests/integration/test_investigation_live.py` is the Phase 08 exit test. It runs the service under uvicorn with PostgreSQL and Ollama, investigates a scenario A incident (202 in under 5 s, 409 while running) to a schema-valid verdict, checks the trace and evidence, and covers the writer-role check and abandoned runs.
+- `tests/integration/test_tools_db.py` needs PostgreSQL and npm. It uses the per-module `sentinelx_ai_test_*` database from `tests/integration/conftest.py` (migrated, seeded, `db:roles`), then proves the grants (writes and sensitive reads denied even in a `READ WRITE` transaction), the read-only session, the timeout, each tool's results and that injected log text comes back as plain data.

@@ -7,9 +7,10 @@ import { analysts } from "./schema.ts";
 
 export const APP_ROLE = "sentinelx_app";
 export const AI_TOOLS_ROLE = "sentinelx_ai_tools";
+export const AI_WRITER_ROLE = "sentinelx_ai_writer";
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Enables LOGIN for `role` with the password embedded in `roleUrl` (APP_DATABASE_URL, AI_TOOLS_DATABASE_URL). */
+/** Enables LOGIN for `role` with the password embedded in `roleUrl` (APP_/AI_TOOLS_/AI_WRITER_DATABASE_URL). */
 export async function enableRoleLogin(ownerUrl: string, roleUrl: string, role: string): Promise<void> {
   const parsed = new URL(roleUrl);
   const user = decodeURIComponent(parsed.username);

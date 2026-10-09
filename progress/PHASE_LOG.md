@@ -9,8 +9,8 @@
 | 04 | COMPLETE | progress/handoffs/phase-04.md |
 | 05 | COMPLETE | progress/handoffs/phase-05.md |
 | 06 | COMPLETE | progress/handoffs/phase-06.md |
-| 07 | READY_FOR_NEXT_PHASE | progress/handoffs/phase-07.md |
-| 08 | NOT_STARTED | — |
+| 07 | COMPLETE | progress/handoffs/phase-07.md |
+| 08 | READY_FOR_NEXT_PHASE | progress/handoffs/phase-08.md |
 | 09 | NOT_STARTED | — |
 | 10 | NOT_STARTED | — |
 | 11 | NOT_STARTED | — |

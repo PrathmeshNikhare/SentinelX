@@ -1,29 +1,28 @@
-"""FastAPI AI service (D-057, D-058). Internal only: bound to 127.0.0.1, every route but /health needs the token."""
+"""FastAPI AI service (D-057, D-058, D-064). Internal only: 127.0.0.1, every route but /health needs the token."""
 
 from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
-from fastapi import FastAPI, Request
+import psycopg
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .config import Settings
-from .contracts import InvestigationRequest
+from .config import ConfigError, Settings
+from .contracts import InvestigationAccepted, InvestigationRequest
+from .graph import Deps, Investigator
 from .llm import LlmClient, OllamaClient
+from .log import log
+from .store import Store
+from .tools import ToolDatabase, build_tools
 
 PUBLIC_PATHS = frozenset({"/health"})
 MAX_BODY_BYTES = 16 * 1024
-
-
-def log(severity: str, event: str, /, **fields: Any) -> None:
-    print(json.dumps({"ts": datetime.now(UTC).isoformat(), "severity": severity, "event": event, **fields}), flush=True)
 
 
 def error(status: int, code: str, message: str, **extra: Any) -> JSONResponse:
@@ -34,11 +33,21 @@ def _digest(value: str) -> bytes:
     return hashlib.sha256(value.encode()).digest()
 
 
-def create_app(settings: Settings, llm: LlmClient | None = None) -> FastAPI:
+class Runner(Protocol):
+    def run(self, run_id: str, incident_id: str) -> None: ...
+
+
+def create_app(
+    settings: Settings, llm: LlmClient | None = None, store: Store | None = None, investigator: Runner | None = None
+) -> FastAPI:
     app = FastAPI(title="SentinelX AI service", docs_url=None, redoc_url=None, openapi_url=None)
     client: LlmClient = llm or OllamaClient(
         settings.ollama_base_url, settings.ollama_model, settings.ollama_timeout_seconds
     )
+    runs = store or Store(settings.writer_database_url)
+    # Knowledge search is not offered until Phase 09 supplies a retriever (D-067).
+    tools = {t.name: t for t in build_tools(ToolDatabase(settings.tools_database_url), None)}
+    runner: Runner = investigator if investigator is not None else Investigator(Deps(runs, client, tools))
     expected = _digest(settings.service_token)
 
     @app.middleware("http")
@@ -80,8 +89,26 @@ def create_app(settings: Settings, llm: LlmClient | None = None) -> FastAPI:
         return {"status": "ready", "model": client.model}
 
     @app.post("/v1/investigations", response_model=None)
-    def start_investigation(body: InvestigationRequest) -> JSONResponse:
-        log("info", "ai.investigation_requested", incidentId=body.incident_id, requestedBy=body.requested_by)
-        return error(501, "not_implemented", "Investigations are implemented in Phase 08.", phase="08")
+    def start_investigation(body: InvestigationRequest, background: BackgroundTasks) -> JSONResponse:
+        """Queues a run and returns 202 at once; the graph runs in a background task (D-015)."""
+        try:
+            started = runs.start_run(body.incident_id)
+        except (psycopg.Error, ConfigError) as exc:
+            log("error", "ai.store_unavailable", error=type(exc).__name__)
+            return error(503, "unavailable", "The investigation database is unavailable.")
+        if started.outcome == "in_progress":
+            return error(409, "investigation_in_progress", "An investigation of this incident is already running.")
+        if started.outcome == "not_found" or started.run_id is None:
+            return error(404, "not_found", "Incident not found.")
+        background.add_task(runner.run, started.run_id, body.incident_id)
+        log(
+            "info",
+            "ai.investigation_queued",
+            runId=started.run_id,
+            incidentId=body.incident_id,
+            requestedBy=body.requested_by,
+        )
+        accepted = InvestigationAccepted(investigation_run_id=started.run_id, status="queued")
+        return JSONResponse(accepted.model_dump(), status_code=202)
 
     return app
