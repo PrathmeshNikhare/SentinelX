@@ -41,10 +41,11 @@ def load_root_env(path: Path = REPO_ROOT / ".env") -> None:
             os.environ.setdefault(key.strip(), value.strip())
 
 
-def validate_service_token(token: str) -> None:
-    if len(token) < MIN_TOKEN_LENGTH or "replace-me" in token.lower() or len(set(token)) < 8:
+def validate_secret(name: str, value: str) -> None:
+    """Refuse missing, short, placeholder or low-variety secrets (D-025): AI_SERVICE_TOKEN, QDRANT_API_KEY."""
+    if len(value) < MIN_TOKEN_LENGTH or "replace-me" in value.lower() or len(set(value)) < 8:
         raise ConfigError(
-            f"AI_SERVICE_TOKEN must be a random value of at least {MIN_TOKEN_LENGTH} characters "
+            f"{name} must be a random value of at least {MIN_TOKEN_LENGTH} characters "
             '(generate: python -c "import secrets; print(secrets.token_urlsafe(32))")'
         )
 
@@ -63,6 +64,7 @@ class Settings:
     ollama_timeout_seconds: float
     tools_database_url: str  # sentinelx_ai_tools, SELECT-only (D-061)
     writer_database_url: str  # sentinelx_ai_writer, runs/trace/evidence (D-065)
+    qdrant_api_key: str = ""  # D-078; validated by from_env
     qdrant_url: str = "http://localhost:6333"
     knowledge_collection: str = "security_knowledge"  # D-071
 
@@ -71,7 +73,7 @@ class Settings:
         load_root_env()
         refuse_cloud_tracing()
         token = os.environ.get("AI_SERVICE_TOKEN", "")
-        validate_service_token(token)
+        validate_secret("AI_SERVICE_TOKEN", token)
         timeout_text = os.environ.get("OLLAMA_TIMEOUT_SECONDS") or str(DEFAULT_TIMEOUT_SECONDS)
         try:
             timeout = float(timeout_text)
@@ -86,6 +88,8 @@ class Settings:
         missing = [name for name, url in urls.items() if not url]
         if missing:
             raise ConfigError(f"{', '.join(missing)} not set (copy from .env.example; enable with `npm run db:roles`)")
+        qdrant_key = os.environ.get("QDRANT_API_KEY", "")
+        validate_secret("QDRANT_API_KEY", qdrant_key)
         return Settings(
             service_token=token,
             ollama_base_url=os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434",
@@ -93,6 +97,7 @@ class Settings:
             ollama_timeout_seconds=timeout,
             tools_database_url=urls["AI_TOOLS_DATABASE_URL"],
             writer_database_url=urls["AI_WRITER_DATABASE_URL"],
+            qdrant_api_key=qdrant_key,
             qdrant_url=os.environ.get("QDRANT_URL") or "http://localhost:6333",
             knowledge_collection=os.environ.get("KNOWLEDGE_COLLECTION") or "security_knowledge",
         )

@@ -1,7 +1,7 @@
 # Phase 11 — Incident UI — Handoff
 
 PHASE: 11
-STATUS: READY_FOR_NEXT_PHASE
+STATUS: COMPLETE (receiver accepted 2026-10-09 at Phase 12 start: db:roles ok, verify.py 24/24 incl. E2E walkthrough)
 GATE: `/verify-phase` APPROVED (2026-10-09)
 BASE COMMIT: `622a9f1` (Phase 10). Phase 11 is the commit that adds this file.
 PREVIOUS PHASE: 10 accepted as COMPLETE at the start of this phase (db:roles ok, verify.py 24/24 incl. the live grounded investigation).

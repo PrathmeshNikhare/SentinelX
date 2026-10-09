@@ -24,6 +24,7 @@ from .tools import KNOWLEDGE_TIMEOUT_SECONDS, KnowledgeRetriever, ToolDatabase, 
 
 PUBLIC_PATHS = frozenset({"/health"})
 MAX_BODY_BYTES = 16 * 1024
+BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
 
 
 def error(status: int, code: str, message: str, **extra: Any) -> JSONResponse:
@@ -40,7 +41,7 @@ class Runner(Protocol):
 
 def default_retriever(settings: Settings) -> QdrantRetriever:
     """Qdrant over the ingested collection (D-071); the embedding model loads on the first search."""
-    connect = lambda: qdrant_client(settings.qdrant_url, int(KNOWLEDGE_TIMEOUT_SECONDS))  # noqa: E731
+    connect = lambda: qdrant_client(settings.qdrant_url, int(KNOWLEDGE_TIMEOUT_SECONDS), settings.qdrant_api_key)  # noqa: E731
     return QdrantRetriever(connect, settings.knowledge_collection, SentenceEmbedder())
 
 
@@ -71,11 +72,13 @@ def create_app(
         header = request.headers.get("authorization", "")
         presented = header[len("Bearer ") :] if header.startswith("Bearer ") else ""
         if not presented or not hmac.compare_digest(_digest(presented), expected):
+            log("warn", "ai.unauthorized", method=request.method, path=request.url.path)  # audit (D-077), no token
             return error(401, "unauthorized", "A valid service token is required.")
         declared = request.headers.get("content-length")
+        if declared is None and request.method in BODY_METHODS:
+            # A body must declare its length: uvicorn enforces Content-Length framing, so the cap below is complete.
+            return error(411, "length_required", "Content-Length is required.")
         if declared is not None and (not declared.isdigit() or int(declared) > MAX_BODY_BYTES):
-            # ponytail: checks Content-Length only; the sole caller (Next.js server) always sends it.
-            # Cap the stream instead if another caller appears.
             return error(413, "payload_too_large", f"The body must be at most {MAX_BODY_BYTES} bytes.")
         return await call_next(request)
 

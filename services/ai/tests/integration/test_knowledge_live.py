@@ -28,7 +28,9 @@ SMOKE_QUERIES = [
 
 
 def retriever(knowledge: Knowledge) -> QdrantRetriever:
-    return QdrantRetriever(lambda: qdrant_client(knowledge.qdrant_url, 5), knowledge.collection, knowledge.embedder)
+    return QdrantRetriever(
+        lambda: qdrant_client(knowledge.qdrant_url, 5, knowledge.api_key), knowledge.collection, knowledge.embedder
+    )
 
 
 def stored(owner_url: str) -> dict[str, tuple[str, str, str | None]]:
@@ -42,7 +44,7 @@ def test_ingest_writes_one_row_and_one_point_per_document(database: Stack, knowl
     assert knowledge.counts.documents == len(corpus) and knowledge.counts.removed == 0
     rows = stored(database.owner_url)
     assert {(s, e) for s, e, _ in rows.values()} == {(d.source, d.external_id) for d in corpus}
-    client = qdrant_client(knowledge.qdrant_url, 5)
+    client = qdrant_client(knowledge.qdrant_url, 5, knowledge.api_key)
     assert client.count(knowledge.collection, exact=True).count == len(corpus)
     points = client.retrieve(knowledge.collection, ids=[p for _, _, p in rows.values() if p], with_payload=True)
     assert {p.payload["document_id"] for p in points if p.payload} == set(rows)
@@ -75,7 +77,7 @@ def test_reingest_is_idempotent_and_removes_documents_no_longer_in_the_corpus(
     database: Stack, knowledge: Knowledge
 ) -> None:
     before = stored(database.owner_url)
-    client = qdrant_client(knowledge.qdrant_url, 5)
+    client = qdrant_client(knowledge.qdrant_url, 5, knowledge.api_key)
     stale_point = "00000000-0000-0000-0000-00000000beef"
     with owner_connect(database.owner_url) as conn:
         stale = conn.execute(
@@ -98,8 +100,12 @@ def test_reingest_is_idempotent_and_removes_documents_no_longer_in_the_corpus(
 
 
 def test_unreachable_qdrant_or_missing_collection_is_a_typed_tool_error(database: Stack, knowledge: Knowledge) -> None:
-    closed = QdrantRetriever(lambda: qdrant_client("http://127.0.0.1:1", 2), knowledge.collection, knowledge.embedder)
-    missing = QdrantRetriever(lambda: qdrant_client(knowledge.qdrant_url, 2), "no_such_collection", knowledge.embedder)
+    closed = QdrantRetriever(
+        lambda: qdrant_client("http://127.0.0.1:1", 2, knowledge.api_key), knowledge.collection, knowledge.embedder
+    )
+    missing = QdrantRetriever(
+        lambda: qdrant_client(knowledge.qdrant_url, 2, knowledge.api_key), "no_such_collection", knowledge.embedder
+    )
     for broken in (closed, missing):
         tool = {t.name: t for t in build_tools(ToolDatabase(database.tools_url), broken)}["search_security_knowledge"]
         with pytest.raises(ToolError) as caught:

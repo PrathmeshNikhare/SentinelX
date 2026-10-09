@@ -17,6 +17,7 @@ Prerequisites and Windows/POSIX details: `docs/16_ENVIRONMENT.md`.
 
 ```sh
 cp .env.example .env                 # PowerShell: Copy-Item .env.example .env
+# then set AI_SERVICE_TOKEN and QDRANT_API_KEY in .env: python -c "import secrets; print(secrets.token_urlsafe(32))"
 docker compose up -d
 (cd apps/web && npm ci && npm run db:migrate && npm run db:seed && npm run db:roles && npx playwright install chromium)
 (cd apps/web && ANALYST_PASSWORD='<12+ chars>' npm run analyst:create -- analyst@sentinelx.local "Demo Analyst")

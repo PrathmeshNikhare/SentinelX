@@ -13,6 +13,7 @@ import hashlib
 import json
 import threading
 import uuid
+import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Protocol
@@ -122,13 +123,17 @@ class SentenceEmbedder:
 # Retrieval.
 
 
-def qdrant_client(url: str, timeout_seconds: int) -> QdrantClient:
+def qdrant_client(url: str, timeout_seconds: int, api_key: str) -> QdrantClient:
     """IPv4 for `localhost`: on Windows `localhost` tries ::1 first and every call took 2 s more (as D-051)."""
     parts = urlsplit(url)
     if parts.hostname == "localhost":
         url = urlunsplit(parts._replace(netloc=parts.netloc.replace("localhost", "127.0.0.1", 1)))
     # Versions are pinned together (client 1.15.1, server 1.15.0, D-070); skip the network check at construction.
-    return QdrantClient(url=url, timeout=timeout_seconds, check_compatibility=False)
+    # The key travels over plain HTTP to 127.0.0.1 only (D-023); qdrant-client's insecure-connection warning is
+    # expected locally. ponytail: add TLS before Qdrant is reachable from another host.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Api key is used with an insecure connection")
+        return QdrantClient(url=url, timeout=timeout_seconds, api_key=api_key, check_compatibility=False)
 
 
 class QdrantRetriever:
@@ -271,7 +276,7 @@ def ingest(owner_url: str, client: QdrantClient, collection: str, embedder: Embe
 def main() -> int:
     import os
 
-    from .config import load_root_env
+    from .config import ConfigError, load_root_env, validate_secret
     from .log import log
 
     load_root_env()
@@ -280,7 +285,13 @@ def main() -> int:
         log("error", "knowledge.config_invalid", message="DATABASE_URL is not set")
         return 1
     collection = os.environ.get("KNOWLEDGE_COLLECTION") or DEFAULT_COLLECTION
-    client = qdrant_client(os.environ.get("QDRANT_URL") or "http://localhost:6333", 30)
+    api_key = os.environ.get("QDRANT_API_KEY", "")
+    try:
+        validate_secret("QDRANT_API_KEY", api_key)
+    except ConfigError as error:
+        log("error", "knowledge.config_invalid", message=str(error))
+        return 1
+    client = qdrant_client(os.environ.get("QDRANT_URL") or "http://localhost:6333", 30, api_key)
     counts = ingest(owner_url, client, collection, SentenceEmbedder())
     log("info", "knowledge.ingest", collection=collection, documents=counts.documents, removed=counts.removed)
     return 0

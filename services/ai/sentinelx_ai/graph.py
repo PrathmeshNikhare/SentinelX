@@ -379,7 +379,19 @@ def build_graph(deps: Deps) -> Any:
                 failure = f"Ollama unavailable: {error}"
                 break
             else:
-                known = known_techniques(deps.tool_db, list(candidate.mitre_techniques))
+                try:
+                    known = known_techniques(deps.tool_db, list(candidate.mitre_techniques))
+                except ToolError as error:  # cannot validate: never accept, but keep the answer for audit (D-019)
+                    attempts.append(
+                        {
+                            "valid": False,
+                            "code": "validation_unavailable",
+                            "error": str(error),
+                            "output": candidate.model_dump(mode="json"),
+                        }
+                    )
+                    failure = f"Verdict validation unavailable: {error.code}"
+                    break
                 findings = check_verdict(candidate, state["evidence"], state["incident"]["severity"], known)
                 blocking = rejected(findings)
                 attempts.append(
@@ -415,7 +427,8 @@ def build_graph(deps: Deps) -> Any:
         errors: list[dict[str, Any]] = []
         for index, attempt in enumerate(state["verdict_attempts"]):
             if "error" in attempt:
-                errors.append({"attempt": index, "code": "schema", "detail": attempt["error"], "effect": "reject"})
+                code = attempt.get("code", "schema")
+                errors.append({"attempt": index, "code": code, "detail": attempt["error"], "effect": "reject"})
             errors += [{"attempt": index, **f} for f in attempt.get("findings", []) if f["effect"] == "reject"]
         notes = [{"attempt": len(state["verdict_attempts"]) - 1, **f} for f in state["findings"]]
         accepted = state["verdict"] is not None

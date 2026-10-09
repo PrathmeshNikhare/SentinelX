@@ -2,7 +2,10 @@
 
 import unittest
 
-from scripts.verify import compose_variables, env_example_keys, forbidden_tracked_paths, parse_compose_ps
+import os
+from unittest import mock
+
+from scripts.verify import compose_variables, env_example_keys, env_value, forbidden_tracked_paths, parse_compose_ps
 
 
 class ComposeVariablesTest(unittest.TestCase):
@@ -15,6 +18,16 @@ class EnvExampleKeysTest(unittest.TestCase):
     def test_ignores_comments_and_blank_lines(self) -> None:
         text = "# comment\n\nA=1\n  B = two\n#C=3\nD=\n"
         self.assertEqual(env_example_keys(text), {"A", "B", "D"})
+
+
+class EnvValueTest(unittest.TestCase):
+    def test_environment_wins_then_env_file(self) -> None:
+        text = "# QDRANT_API_KEY=commented\nQDRANT_API_KEY = from-file \nOTHER=x\n"
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(env_value("QDRANT_API_KEY", text), "from-file")
+            self.assertEqual(env_value("MISSING", text), "")
+        with mock.patch.dict(os.environ, {"QDRANT_API_KEY": "from-env"}):
+            self.assertEqual(env_value("QDRANT_API_KEY", text), "from-env")
 
 
 class ForbiddenTrackedPathsTest(unittest.TestCase):

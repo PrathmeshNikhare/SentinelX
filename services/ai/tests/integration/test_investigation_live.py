@@ -114,10 +114,11 @@ def service(database: Stack, knowledge: Knowledge) -> Iterator[str]:
         ollama_timeout_seconds=float(os.environ.get("OLLAMA_TIMEOUT_SECONDS") or 120),
         tools_database_url=database.tools_url,
         writer_database_url=database.writer_url,
+        qdrant_api_key=knowledge.api_key,
         qdrant_url=knowledge.qdrant_url,
         knowledge_collection=knowledge.collection,
     )
-    connect = lambda: qdrant_client(knowledge.qdrant_url, 5)  # noqa: E731
+    connect = lambda: qdrant_client(knowledge.qdrant_url, 5, knowledge.api_key)  # noqa: E731
     retriever = QdrantRetriever(connect, knowledge.collection, knowledge.embedder)  # model already loaded
     app = create_app(settings, retriever=retriever)
     port = free_port()

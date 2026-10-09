@@ -206,7 +206,7 @@ def test_the_client_is_created_on_first_search_only() -> None:
 
 
 def test_localhost_is_mapped_to_ipv4() -> None:
-    client = knowledge.qdrant_client("http://localhost:6333", 5)
+    client = knowledge.qdrant_client("http://localhost:6333", 5, "test-api-key-0123456789-abcdefghijkl")
     assert "127.0.0.1:6333" in str(client._client.rest_uri)  # type: ignore[attr-defined]  # no public accessor
 
 

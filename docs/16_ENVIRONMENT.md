@@ -99,6 +99,8 @@ In `services/detection`, train the model once (`python -m sentinelx_detection.tr
 
 The service needs `AI_TOOLS_DATABASE_URL` and `AI_WRITER_DATABASE_URL` (both enabled by `npm run db:roles`); it refuses to start otherwise, and at startup marks runs left unfinished by a previous process as failed (D-065). The integration tests create and drop their own `sentinelx_ai_test_*` databases.
 
+Qdrant requires `QDRANT_API_KEY` (Phase 12, D-078): put a random value of 32+ characters in `.env` (`python -c "import secrets; print(secrets.token_urlsafe(32))"`) before `docker compose up -d`. Compose, the AI service and the ingestion CLI refuse to start without it.
+
 Knowledge (Phase 09): `python -m sentinelx_ai.knowledge` (owner role, idempotent) ingests the MITRE techniques and playbooks into `knowledge_documents` and the Qdrant collection `security_knowledge` (D-071). Re-run it after editing `fixtures/mitre_techniques.json` or `fixtures/knowledge/playbooks.json`; `verify.py` fails until it has run. The first run downloads `all-MiniLM-L6-v2` from Hugging Face into the user cache; the service then loads it from the cache, warmed in the background at startup (a cold load took about 19 s). The integration tests use throwaway `sentinelx_test_knowledge_*` collections.
 
 Investigation demo (Phase 08): run the web app and the AI service with the same `AI_SERVICE_TOKEN`, open an incident, press **Investigate**, and reload. `GET /api/investigations/<run id>` returns the status, verdict, trace and evidence. A run of the scenario A incident took about 60 s on the reference machine. Leave `LANGSMITH_TRACING`/`LANGCHAIN_TRACING_V2` unset: the service refuses to start when they are `true` (D-060).

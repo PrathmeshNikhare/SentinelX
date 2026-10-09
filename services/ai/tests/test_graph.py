@@ -489,3 +489,21 @@ def test_without_retrieved_techniques_the_prompt_says_to_leave_them_empty() -> N
     llm = ScriptedLlm(verdicts=[VERDICT])
     investigate(llm)
     assert "supported by the evidence: none (leave mitre_techniques empty)." in llm.prompts[-1]
+
+
+def test_a_validation_outage_fails_the_run_but_keeps_the_answer_for_audit() -> None:
+    class ValidationDown(FakeToolDb):
+        def fetch(self, tool: str, query: str, params: dict[str, Any]) -> list[Any]:
+            if tool == "verdict_validation":
+                raise ToolError(tool, "unavailable", "OperationalError")
+            return super().fetch(tool, query, params)
+
+    claimed = {**VERDICT, "mitre_techniques": ["T1110"]}  # a technique to look up in the curated set
+    store = investigate(ScriptedLlm(verdicts=[claimed]), db=ValidationDown())
+    assert store.finished is not None
+    assert store.finished["status"] == "failed" and store.finished["requires_review"] is True
+    assert store.finished["verdict"] is None
+    assert store.finished["error_message"] == "Verdict validation unavailable: unavailable"
+    (attempt,) = store.finished["raw_output"]["attempts"]
+    assert attempt["code"] == "validation_unavailable" and attempt["output"]["verdict"] == VERDICT["verdict"]
+    assert [e["code"] for e in store.finished["validation_errors"]] == ["validation_unavailable"]

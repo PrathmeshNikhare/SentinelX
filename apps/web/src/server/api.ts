@@ -5,7 +5,7 @@ import { bearerToken, checkIngestToken } from "../ingest/token.ts";
 import { SESSION_COOKIE } from "./auth/session.ts";
 import { findActiveSession, type SessionAnalyst } from "./auth/session-store.ts";
 import { db } from "./db.ts";
-import { logError } from "./log.ts";
+import { logError, logEvent } from "./log.ts";
 
 export const apiError = (status: number, code: string, message: string, extra: Record<string, unknown> = {}) =>
   NextResponse.json({ error: { code, message, ...extra } }, { status });
@@ -48,7 +48,10 @@ export async function withIngestAuth(
   if (check === "misconfigured") {
     logError("ingest.token_misconfigured", new Error("INGEST_API_TOKEN is shorter than 32 characters"), { route });
   }
-  if (check !== "valid") return apiError(401, "unauthorized", "Invalid or disabled ingest token.");
+  if (check !== "valid") {
+    logEvent("ingest.unauthorized", { route, reason: check }); // audit (D-077); the presented token is never logged
+    return apiError(401, "unauthorized", "Invalid or disabled ingest token.");
+  }
   try {
     return await handler("token");
   } catch (error) {

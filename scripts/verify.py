@@ -45,6 +45,17 @@ def compose_variables(compose_text: str) -> set[str]:
     return set(re.findall(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)", compose_text))
 
 
+def env_value(name: str, env_text: str) -> str:
+    """A variable from the environment, else from .env text (the value is used, never printed)."""
+    if os.environ.get(name):
+        return os.environ[name]
+    for line in env_text.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key.strip() == name:
+            return value.strip()
+    return ""
+
+
 def env_example_keys(env_text: str) -> set[str]:
     keys = set()
     for line in env_text.splitlines():
@@ -222,11 +233,14 @@ def check_knowledge() -> Result:
     fixtures = ROOT / "fixtures"
     expected = len(json.loads((fixtures / "mitre_techniques.json").read_text(encoding="utf-8"))["techniques"])
     expected += len(json.loads((fixtures / "knowledge" / "playbooks.json").read_text(encoding="utf-8"))["documents"])
+    env_file = ROOT / ".env"
+    api_key = env_value("QDRANT_API_KEY", env_file.read_text(encoding="utf-8") if env_file.is_file() else "")
+    request = urllib.request.Request(KNOWLEDGE_COLLECTION_URL, headers={"api-key": api_key})  # D-078
     try:
-        with urllib.request.urlopen(KNOWLEDGE_COLLECTION_URL, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=5) as response:
             points = json.load(response)["result"]["points_count"]
     except (OSError, ValueError, KeyError):
-        return Result(name, FAIL, "missing: run (cd services/ai && python -m sentinelx_ai.knowledge)")
+        return Result(name, FAIL, "missing or unauthorized: check QDRANT_API_KEY, then run python -m sentinelx_ai.knowledge")
     ok = points == expected
     return Result(name, PASS if ok else FAIL, f"{points}/{expected} documents" + ("" if ok else "; re-run ingestion"))
 

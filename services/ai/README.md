@@ -37,7 +37,7 @@ Environment (repo-root `.env`):
 - optional `OLLAMA_TIMEOUT_SECONDS` (default 120);
 - `AI_TOOLS_DATABASE_URL`: the SELECT-only tools role, enabled by `npm run db:roles` in `apps/web` (D-061);
 - `AI_WRITER_DATABASE_URL`: the investigation persistence role, also enabled by `npm run db:roles` (D-065);
-- `QDRANT_URL` (default `http://localhost:6333`) and optional `KNOWLEDGE_COLLECTION` (default `security_knowledge`, D-071);
+- `QDRANT_URL` (default `http://localhost:6333`), `QDRANT_API_KEY` (required, random, 32+ characters, D-078) and optional `KNOWLEDGE_COLLECTION` (default `security_knowledge`, D-071);
 - `LANGSMITH_TRACING` / `LANGCHAIN_TRACING_V2` must not be `true` (the service refuses to start, D-060).
 
 ## Contracts

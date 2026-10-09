@@ -68,6 +68,9 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.15.0
+    environment:
+      # Every API call needs this key (D-078); /readyz stays open for health checks.
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY must be set in .env (see .env.example)}
     ports:
       - "127.0.0.1:6333:6333"
     volumes:

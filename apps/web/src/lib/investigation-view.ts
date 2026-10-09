@@ -7,6 +7,7 @@ export const FINDING_LABELS: Record<string, string> = {
   unknown_mitre_technique: "MITRE technique outside the curated ATT&CK set",
   unsupported_mitre_technique: "MITRE technique not retrieved in this investigation",
   severity_disagreement: "AI-assessed severity differs from the deterministic severity",
+  validation_unavailable: "The verdict could not be validated (database unavailable)",
 };
 
 export const EFFECT_LABELS: Record<string, string> = {

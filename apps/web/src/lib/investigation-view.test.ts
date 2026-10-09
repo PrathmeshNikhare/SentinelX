@@ -67,7 +67,7 @@ describe("parsing stored investigation JSON", () => {
     ];
     expect(parseFindings(findings)).toEqual([findings[0]]);
     expect(parseFindings({})).toEqual([]);
-    for (const code of ["schema", "unknown_evidence_id", "unknown_mitre_technique", "unsupported_mitre_technique", "severity_disagreement"]) {
+    for (const code of ["schema", "unknown_evidence_id", "unknown_mitre_technique", "unsupported_mitre_technique", "severity_disagreement", "validation_unavailable"]) {
       expect(FINDING_LABELS[code], code).toBeTruthy();
     }
   });

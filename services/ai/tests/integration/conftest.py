@@ -108,6 +108,7 @@ def database(request: pytest.FixtureRequest) -> Iterator[Stack]:
 @dataclass(frozen=True)
 class Knowledge:
     qdrant_url: str
+    api_key: str
     collection: str
     embedder: SentenceEmbedder
     counts: IngestCounts
@@ -117,7 +118,8 @@ class Knowledge:
 def knowledge(database: Stack) -> Iterator[Knowledge]:
     """The real corpus ingested with the real model into a throwaway Qdrant collection (D-070, D-071)."""
     url = os.environ.get("QDRANT_URL") or "http://localhost:6333"
-    client = qdrant_client(url, 30)
+    api_key = env("QDRANT_API_KEY")
+    client = qdrant_client(url, 30, api_key)
     for existing in client.get_collections().collections:
         stamp = existing.name.rsplit("_", 1)[-1]
         stale = stamp.isdigit() and time.time() - int(stamp) > STALE_AFTER_SECONDS
@@ -126,6 +128,6 @@ def knowledge(database: Stack) -> Iterator[Knowledge]:
     collection = f"{COLLECTION_PREFIX}{os.getpid()}_{int(time.time())}"
     embedder = SentenceEmbedder()
     try:
-        yield Knowledge(url, collection, embedder, ingest(database.owner_url, client, collection, embedder))
+        yield Knowledge(url, api_key, collection, embedder, ingest(database.owner_url, client, collection, embedder))
     finally:
         client.delete_collection(collection)

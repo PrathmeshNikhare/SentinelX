@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
@@ -121,3 +123,12 @@ def test_oversized_bodies_are_rejected(api: TestClient) -> None:
 def test_unknown_routes_and_methods_use_the_error_shape(api: TestClient) -> None:
     assert api.get("/v1/unknown", headers=AUTH).json()["error"]["code"] == "not_found"
     assert api.get("/v1/investigations", headers=AUTH).json()["error"]["code"] == "method_not_allowed"
+
+
+def test_bodies_without_a_declared_length_are_refused(api: TestClient) -> None:
+    def chunks() -> Iterator[bytes]:  # streamed with Transfer-Encoding: chunked, no Content-Length
+        yield b'{"incident_id": "inc_3f9a2b1c4d5e6f70", '
+        yield b'"requested_by": "an_bf897b6605224d78"}'
+
+    response = api.post("/v1/investigations", headers={**AUTH, "content-type": "application/json"}, content=chunks())
+    assert response.status_code == 411 and response.json()["error"]["code"] == "length_required"

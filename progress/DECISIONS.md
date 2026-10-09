@@ -509,6 +509,29 @@ Whether the cited IDs actually exist is checked in Phase 10.
 - No chart was added: no series here is more readable as a chart than as the timeline table (D-036 "meaningful charts only").
 - Verified visually: the E2E walkthrough saves full-page screenshots to `test-results/`. Reviewing them found that shadcn's `TableCell` default `whitespace-nowrap` cut off the risk formula and the trace's evidence links; those cells now wrap.
 
+### D-075 — Login throttling (Phase 12; resolves the D-034 deferral)
+- After 5 failed sign-ins for one normalized email within 15 minutes, further attempts for that email are refused with "Too many failed attempts. Try again in 15 minutes." until the window passes. A success clears the count.
+- The throttle applies to unknown emails exactly as to real ones, so it reveals nothing about which accounts exist. The throttled email is not logged (`auth.login_rejected` reason `throttled`).
+- In-process memory, capped at 10,000 tracked emails (oldest evicted), correct for the single web instance (D-023). `ponytail:` a multi-instance deployment needs a shared store (a PostgreSQL table) and a per-client-IP limit behind a trusted proxy. No IP limit today: without a proxy the client IP is not reliably available in Server Actions.
+
+### D-076 — Security headers (Phase 12)
+- `next.config.ts` sends on every response a Content-Security-Policy from the Next.js "Without Nonces" guide:
+  - `default-src 'self'`; scripts `'self' 'unsafe-inline'`, plus `'unsafe-eval'` in development only (React);
+  - styles `'self' 'unsafe-inline'`; images `'self' blob: data:`; `connect-src 'self'`;
+  - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`.
+  It also sends `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and a restrictive `Permissions-Policy`; `X-Powered-By` was already off.
+- `upgrade-insecure-requests` is left out, because the console is served over local HTTP. Nonces were rejected because they force dynamic rendering for every page, and SRI is experimental. `'unsafe-inline'` scripts are an accepted local risk (checklist 9.2).
+
+### D-077 — Audit logging and AI-service boundary hardening (Phase 12)
+- Audit events: as listed in docs/21 §8. New ones are `ingest.unauthorized` (route and reason, never the token) and `ai.unauthorized` (method and path, never the header). Failed sign-ins log a reason, not the email.
+- The AI service refuses bodies without Content-Length on POST/PUT/PATCH (411). uvicorn enforces the declared length on the wire, so the 16 KiB cap is now complete; this removes the Phase 06 `ponytail:`.
+- A database outage while validating a verdict fails the run (`Verdict validation unavailable: <code>`), accepts nothing and keeps the model's answer in `raw_output_json` with code `validation_unavailable`. This closes the Phase 10 gap; the web labels the new code.
+
+### D-078 — Qdrant API key (Phase 12; closes the D-071 open item)
+- Compose sets `QDRANT__SERVICE__API_KEY` from `QDRANT_API_KEY` and refuses to start Qdrant when it is empty. Every API call then needs the key; `/readyz` stays open, so the Compose healthcheck and `verify.py` keep working (verified: `/collections` without the key → 401).
+- `qdrant_client(url, timeout, api_key)` always sends it. The AI service (`Settings.qdrant_api_key`) and the ingestion CLI refuse a missing or weak key (`validate_secret`, generalized from the service-token check). `verify.py` reads the key from the environment or `.env` for its collection check, without printing it.
+- The key travels over loopback HTTP; qdrant-client's insecure-connection warning is silenced for that reason only (`ponytail:` add TLS before Qdrant is reachable from another host). The reference `.env` received a generated key by append (never read or printed). The Qdrant container was recreated; its data volume and the 19 ingested documents were kept.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|

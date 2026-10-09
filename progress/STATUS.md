@@ -1,19 +1,19 @@
 # SentinelX Project Status
 
 STATUS: READY_FOR_NEXT_PHASE
-CURRENT_PHASE: 11
+CURRENT_PHASE: 12
 PHASE_GATE: APPROVED
-LAST_VERIFIED_HANDOFF: progress/handoffs/phase-11.md
+LAST_VERIFIED_HANDOFF: progress/handoffs/phase-12.md
 BLOCKERS: NONE
 
 ## Current objective
-Phase 11 — Incident UI is ready for receiver verification.
+Phase 12 — Security & Reliability is ready for receiver verification.
 
 ## Last completed work
-2026-10-09 Phase 11: incident page in the docs/09 order (summary, timeline with rule chips, detection signals with risk components, investigation trace with llm/fallback origins, anchored evidence, MITRE linked to evidence, verdict labelled AI-assessed/uncalibrated beside the deterministic risk, recommendations for analyst approval), review/rejected/failed states, polling while a run is active, E2E walkthrough of scenario A with screenshot review; D-074. Phase 10 accepted as COMPLETE.
+2026-10-09 Phase 12: security checklist `docs/21` (45 items: PASS with evidence, 5 accepted risks), login throttling, security headers (CSP etc.), Qdrant API key, AI-service 411 for bodies without Content-Length, audit events for rejected tokens, validation outage keeps the model answer, dependency review (prod 0 advisories) and secret scan; D-075–D-078. Phase 11 accepted as COMPLETE.
 
 ## Next action
-Run `/start-phase 12`: verify the Phase 11 handoff, mark it COMPLETE or REJECTED, then implement Phase 12 — Security & Reliability.
+Run `/start-phase 13`: verify the Phase 12 handoff, mark it COMPLETE or REJECTED, then implement Phase 13 — Testing & Demo.
 
 ## Verification
-`python scripts/verify.py` -> 24 checks, 0 failed. Web unit 101, E2E 20.
+`python scripts/verify.py` -> 24 checks, 0 failed. Web E2E 23; AI unit 169.

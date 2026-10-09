@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from sentinelx_ai.config import CONTRACTS_DIR, ConfigError, Settings, validate_service_token
+from sentinelx_ai.config import CONTRACTS_DIR, ConfigError, Settings, validate_secret
 from sentinelx_ai.contracts import InvestigationAccepted, InvestigationRequest, Verdict, render_schemas
 
 
@@ -67,7 +67,7 @@ def test_investigation_request_rejects_malformed_ids_and_extra_fields() -> None:
 )
 def test_unsafe_service_tokens_are_refused(token: str) -> None:
     with pytest.raises(ConfigError):
-        validate_service_token(token)
+        validate_secret("AI_SERVICE_TOKEN", token)
 
 
 def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -81,4 +81,13 @@ def test_settings_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         Settings.from_env()
     monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "soon")
     with pytest.raises(ConfigError, match="number"):
+        Settings.from_env()
+
+
+@pytest.mark.parametrize("key", ["", "short", "replace-me-replace-me-replace-me-0000", "a" * 40])
+def test_a_missing_or_weak_qdrant_key_refuses_startup(monkeypatch: pytest.MonkeyPatch, key: str) -> None:
+    monkeypatch.setenv("AI_SERVICE_TOKEN", "Zk3n-p9Q_r7Xw2Lm8Vt4Yb6Hc1Jd5Gf0Se")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2:3b")
+    monkeypatch.setenv("QDRANT_API_KEY", key)
+    with pytest.raises(ConfigError, match="QDRANT_API_KEY"):
         Settings.from_env()

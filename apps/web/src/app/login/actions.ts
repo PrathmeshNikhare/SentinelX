@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { MAX_PASSWORD_LENGTH } from "@/server/auth/password";
 import { setSessionCookie } from "@/server/auth/session";
-import { authenticate, createSession } from "@/server/auth/session-store";
+import { loginThrottle } from "@/server/auth/login-throttle";
+import { authenticate, createSession, normalizeEmail } from "@/server/auth/session-store";
 import { db } from "@/server/db";
 import { logError, logEvent } from "@/server/log";
 
@@ -24,12 +25,19 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   if (email.length > 320 || password.length > MAX_PASSWORD_LENGTH) {
     return { error: "Invalid email or password.", email: echoedEmail };
   }
+  const throttleKey = normalizeEmail(email);
+  if (loginThrottle.isBlocked(throttleKey)) {
+    logEvent("auth.login_rejected", { reason: "throttled" }); // D-075; the email is not logged
+    return { error: "Too many failed attempts. Try again in 15 minutes.", email: echoedEmail };
+  }
   try {
     const analyst = await authenticate(db(), email, password);
     if (!analyst) {
+      loginThrottle.recordFailure(throttleKey);
       logEvent("auth.login_rejected", { reason: "invalid_credentials" });
       return { error: "Invalid email or password.", email: echoedEmail };
     }
+    loginThrottle.reset(throttleKey);
     const { token, expiresAt } = await createSession(db(), analyst.id);
     await setSessionCookie(token, expiresAt);
     logEvent("auth.login", { analystId: analyst.id });
