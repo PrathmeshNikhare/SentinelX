@@ -490,6 +490,25 @@ Whether the cited IDs actually exist is checked in Phase 10.
 - Live (`llama3.2:3b`, scenario A, 3 runs): accepted on the first attempt every time, citing 15–20 evidence IDs (all existing) and T1110/T1078 (both supported), with no findings; 57–77 s.
 - Limitation: the checks prove that every reference is real and retrieved, not that each sentence is true. For example, an earlier run's summary miscounted failed logins while citing real events. Sentence-level claim verification is out of scope; the review flag and the evidence panels (Phase 11) are the human check.
 
+### D-074 — Incident investigation UI (Phase 11)
+- `/incidents/[id]` follows docs/09 in one server-rendered page:
+  - header: identity, status, a "demo scenario data" label when any event ID starts with `demo-` (the generator's prefix, D-044);
+  - deterministic risk and identity;
+  - **Summary**: counts, span, users, IPs, alerts, max risk, rules; facts only, no AI;
+  - **Timeline**: events in order with rule chips and an alert/risk marker;
+  - **Detection signals**: each alert's rules with reasons, and its R/A/P/C components with the formula;
+  - **Investigation trace**: Investigate button, latest run status, steps with `llm`/`fallback` origin, tool, input, outcome and evidence links;
+  - **Evidence**: each row anchored by its `ev_` ID, with source type and ID, the code-written claim, "cited in verdict", and source data in a collapsed preview cut at 2,000 characters;
+  - **MITRE ATT&CK**: curated details for the verdict's techniques plus the found or retrieved ones, each linked to the evidence that mentions it;
+  - **Verdict**: labelled "AI-assessed severity" beside the deterministic severity and risk, "Confidence (model-reported, uncalibrated)" (D-016), and cited evidence linking to the evidence rows;
+  - **Recommendations**: "Suggestions for an analyst to approve. SentinelX takes no action itself."
+- The review path: a banner for `requires_review` runs lists each finding with a readable label (`FINDING_LABELS` covers every code the AI service writes; tested), its detail and attempt. A rejected run shows "No accepted verdict" and no recommendations. A failed run shows its error and keeps the evidence.
+- Validation stays in the AI service (D-073). The UI only parses stored JSON defensively (`parseVerdict`, `parseFindings`) and links techniques to evidence for display; it does not re-decide grounding. `raw_output_json` is not shown (D-069).
+- Polling (D-015): a small client component calls `router.refresh()` every 4 s while the latest run is queued or running, and Investigate is disabled meanwhile. Everything else is a server component.
+- `GET /api/incidents/:id` now also returns each event's `signals` and the incident's `alerts` (with `reasons`), the same data the page renders.
+- No chart was added: no series here is more readable as a chart than as the timeline table (D-036 "meaningful charts only").
+- Verified visually: the E2E walkthrough saves full-page screenshots to `test-results/`. Reviewing them found that shadcn's `TableCell` default `whitespace-nowrap` cut off the risk formula and the trace's evidence links; those cells now wrap.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|

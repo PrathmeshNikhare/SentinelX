@@ -2,16 +2,16 @@
 
 Owners (docs/19_AGENT_OWNERSHIP.md): Frontend Engineer (UI), Backend Engineer (server/API boundary), Database Engineer (Drizzle schema in `src/db/`, migrations in `drizzle/`, D-009).
 
-Filled in: Phase 01 (schema, migrations, seeds), Phase 02 (console shell, auth, API), Phase 03 (event API, Kafka producer), Phase 11 (incident UI).
+Filled in: Phase 01 (schema, migrations, seeds), Phase 02 (console shell, auth, API), Phase 03 (event API, Kafka producer), Phase 08 (investigate/poll endpoints, AI service client), Phase 11 (incident investigation UI, D-074).
 
 ## Layout
 - `src/app/` — App Router. `login/` (Server Action sign-in), `(console)/` (authenticated layout, overview, incidents, incident detail, events, loading/error states), `api/` (JSON routes).
 - `src/proxy.ts` — optimistic cookie check; real session validation happens in every page and API route (D-034).
-- `src/server/` — server-only code: `db.ts` (pool as `sentinelx_app`, D-035), `auth/` (scrypt passwords, DB sessions), `queries/`, `api.ts` (401/501/503 helpers), `load.ts` (degraded-state wrapper), `log.ts` (JSON logs, no query parameters).
-- `src/components/ui/` — shadcn/ui components; `src/components/console/` — badges, tables, empty/degraded states, sidebar.
+- `src/server/` — server-only code: `db.ts` (pool as `sentinelx_app`, D-035), `auth/` (scrypt passwords, DB sessions), `queries/`, `api.ts` (401/503 helpers), `ai-service.ts` (internal AI service client, D-069), `load.ts` (degraded-state wrapper), `log.ts` (JSON logs, no query parameters).
+- `src/components/ui/` — shadcn/ui components; `src/components/console/` — badges, tables, empty/degraded states, sidebar; `src/components/incident/` — incident page sections and the polling refresher (D-074). `src/lib/investigation-view.ts` — pure labels and parsers for stored investigation JSON.
 - `src/db/` — schema, migrator, seeds, admin CLI (`cli.ts`). `drizzle/` — migrations.
 - `src/contracts/` — zod event contracts, source of `contracts/v1/*.schema.json` (D-042). `src/ingest/` — body limits, normalization, ingest token, Kafka producer (D-040–D-043). `src/demo/` — scenario expansion and `send.ts` CLI (D-044).
-- `e2e/` — Playwright suite and its throwaway-database setup (D-037).
+- `e2e/` — Playwright suite and its throwaway-database setup (D-037). `walkthrough.spec.ts` walks scenario A through the incident page and saves full-page screenshots to `test-results/`.
 
 ## Commands
 ```sh

@@ -1,6 +1,6 @@
 import "server-only";
-import { asc, desc, eq } from "drizzle-orm";
-import { evidence, incidents, investigationRuns, investigationTrace } from "../../db/schema.ts";
+import { asc, desc, eq, inArray } from "drizzle-orm";
+import { evidence, incidents, investigationRuns, investigationTrace, mitreTechniques } from "../../db/schema.ts";
 import { isIncidentId, isRunId } from "../../lib/ids.ts";
 import { db } from "../db.ts";
 
@@ -76,4 +76,28 @@ export async function latestInvestigation(incidentId: string) {
     .orderBy(desc(investigationRuns.createdAt))
     .limit(1);
   return run ?? null;
+}
+
+export type InvestigationDetail = NonNullable<Awaited<ReturnType<typeof getInvestigation>>>;
+
+/** The incident's most recent run with its trace and evidence (incident page), or null. */
+export async function latestInvestigationDetail(incidentId: string): Promise<InvestigationDetail | null> {
+  const run = await latestInvestigation(incidentId);
+  return run ? getInvestigation(run.id) : null;
+}
+
+/** Curated ATT&CK rows for the given IDs (D-020); unknown IDs are simply absent. */
+export async function getTechniques(ids: string[]) {
+  if (ids.length === 0) return [];
+  const rows = await db()
+    .select({
+      techniqueId: mitreTechniques.techniqueId,
+      name: mitreTechniques.name,
+      tactics: mitreTechniques.tacticsJson,
+      description: mitreTechniques.description,
+    })
+    .from(mitreTechniques)
+    .where(inArray(mitreTechniques.techniqueId, ids))
+    .orderBy(asc(mitreTechniques.techniqueId));
+  return rows.map((r) => ({ ...r, tactics: r.tactics as string[] }));
 }

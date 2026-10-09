@@ -1,7 +1,7 @@
 # Phase 10 — Evidence-Grounded Verdict — Handoff
 
 PHASE: 10
-STATUS: READY_FOR_NEXT_PHASE
+STATUS: COMPLETE (receiver accepted 2026-10-09 at Phase 11 start: db:roles ok, verify.py 24/24 incl. the live grounded investigation)
 GATE: `/verify-phase` APPROVED (2026-10-09)
 BASE COMMIT: `e6b23cf` (Phase 09). Phase 10 is the commit that adds this file.
 PREVIOUS PHASE: 09 accepted as COMPLETE at the start of this phase (ai pytest 173/173, verify.py 24/24, run under low memory).

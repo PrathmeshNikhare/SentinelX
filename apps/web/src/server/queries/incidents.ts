@@ -1,6 +1,6 @@
 import "server-only";
-import { asc, desc, eq, sql } from "drizzle-orm";
-import { incidentEvents, incidents, securityEvents } from "../../db/schema.ts";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { alerts, detectionSignals, incidentAlerts, incidentEvents, incidents, securityEvents } from "../../db/schema.ts";
 import { isIncidentId } from "../../lib/ids.ts";
 import { canTransition, type IncidentStatus } from "../../lib/incident-lifecycle.ts";
 import { db } from "../db.ts";
@@ -30,7 +30,14 @@ export async function listIncidents(limit = MAX_INCIDENTS) {
 
 export type IncidentSummary = Awaited<ReturnType<typeof listIncidents>>[number];
 
-/** Incident with its linked events, or null if the id is malformed or unknown. */
+/** Shape of alerts.reasons_json written by the detection worker (D-052); read-only here. */
+export interface AlertReasons {
+  signals?: { rule: string; score: number; reason: string }[];
+  components?: { rule: number; anomaly: number; reputation: number; context: number };
+  formula?: string;
+}
+
+/** Incident with its linked events (each with its rule hits) and alerts, or null if the id is malformed or unknown. */
 export async function getIncident(id: string) {
   if (!isIncidentId(id)) return null;
   const [incident] = await db().select(incidentColumns).from(incidents).where(eq(incidents.id, id)).limit(1);
@@ -52,8 +59,42 @@ export async function getIncident(id: string) {
     .where(eq(incidentEvents.incidentId, id))
     .orderBy(asc(securityEvents.occurredAt))
     .limit(MAX_INCIDENT_EVENTS);
-  return { ...incident, events };
+  const eventIds = events.map((e) => e.id);
+  const signals = eventIds.length
+    ? await db()
+        .select({
+          eventId: detectionSignals.eventId,
+          ruleName: detectionSignals.ruleName,
+          ruleScore: detectionSignals.ruleScore,
+          severity: detectionSignals.severity,
+          reason: detectionSignals.reason,
+        })
+        .from(detectionSignals)
+        .where(inArray(detectionSignals.eventId, eventIds))
+        .orderBy(desc(detectionSignals.ruleScore), asc(detectionSignals.ruleName))
+    : [];
+  const linkedAlerts = await db()
+    .select({
+      id: alerts.id,
+      eventId: alerts.eventId,
+      riskScore: alerts.riskScore,
+      anomalyScore: alerts.anomalyScore,
+      severity: alerts.severity,
+      reasons: alerts.reasonsJson,
+    })
+    .from(incidentAlerts)
+    .innerJoin(alerts, eq(alerts.id, incidentAlerts.alertId))
+    .where(eq(incidentAlerts.incidentId, id))
+    .orderBy(desc(alerts.riskScore), asc(alerts.id))
+    .limit(MAX_INCIDENT_EVENTS);
+  return {
+    ...incident,
+    events: events.map((e) => ({ ...e, signals: signals.filter((s) => s.eventId === e.id) })),
+    alerts: linkedAlerts.map((a) => ({ ...a, reasons: a.reasons as AlertReasons })),
+  };
 }
+
+export type IncidentDetail = NonNullable<Awaited<ReturnType<typeof getIncident>>>;
 
 export type TransitionResult =
   | { ok: true; from: IncidentStatus; to: IncidentStatus }
