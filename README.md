@@ -1,6 +1,13 @@
 # SentinelX
 
-AI-assisted security-log analysis and evidence-based threat investigation. A portfolio/research-grade prototype, not an enterprise SIEM. See `docs/01_REQUIREMENTS.md` and `docs/02_ARCHITECTURE.md`.
+AI-assisted security-log analysis and evidence-based threat investigation. A portfolio/research-grade prototype, not an enterprise SIEM.
+
+Deterministic code detects, scores and correlates. A small local LLM only investigates: it gathers evidence through read-only tools, and code rejects any verdict that cites something it did not retrieve.
+
+- Architecture (diagrams): `docs/02_ARCHITECTURE.md`
+- Why each component, tradeoffs, measured performance, limitations, interview Q&A: `docs/23_INTERVIEW_GUIDE.md`
+- Security checklist: `docs/21_SECURITY_CHECKLIST.md`
+- Run the demo: `docs/22_DEMO.md`
 
 ## Layout
 - `apps/web/` — Next.js console (Phase 02: auth, navigation, incident/event views, API); Drizzle schema, migrations and seeds (Phase 01).

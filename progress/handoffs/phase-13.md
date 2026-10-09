@@ -1,7 +1,7 @@
 # Phase 13 — Testing & Demo — Handoff
 
 PHASE: 13
-STATUS: READY_FOR_NEXT_PHASE
+STATUS: COMPLETE (receiver accepted 2026-10-09 at Phase 14 start: verify.py 24/24; the full Compose stack from Phase 13 images had been running 5 h with setup/knowledge exit 0, ai healthy, web 200, and served a live investigation. The clean-volume demo was not re-run: it needs stopping the user's running stack)
 GATE: `/verify-phase` APPROVED (2026-10-09)
 BASE COMMIT: `3f2769f` (Phase 12). Phase 13 is the commit that adds this file.
 PREVIOUS PHASE: 12 accepted as COMPLETE at the start of this phase (db:roles ok, verify.py 24/24, Qdrant 401 without the key, verify self-test OK).

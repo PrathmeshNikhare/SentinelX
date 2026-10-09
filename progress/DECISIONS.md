@@ -566,6 +566,11 @@ Whether the cited IDs actually exist is checked in Phase 10.
   - the project was then removed with its volumes.
 - `verify.py` now runs pytest with `--tb=line -rf`, so a failure's one-line reason survives its summary. That is how the one Phase 13 gate failure was diagnosed: the live test's own two-second status poll hit a PostgreSQL connect timeout while the machine had about 1 GB of memory available. The poll now treats a connection error as "still running", bounded by the same deadline.
 
+### D-081 — Interview documentation (Phase 14)
+- `docs/02_ARCHITECTURE.md` shows the system as built in Mermaid (rendered by GitHub): a component and trust-boundary diagram with the database roles, the investigation sequence, and the two deployment topologies.
+- `docs/23_INTERVIEW_GUIDE.md` gives every major component (17) a role, a reason, its cost or the rejected alternative, and its decision references. It also covers tradeoffs, performance numbers each traced to a decision or a measured run, limitations and interview Q&A.
+- The guide is derived from DECISIONS.md and states nothing that a decision or a measurement does not support. Facts were checked against code (e.g. 16 features from `FEATURE_NAMES`, 6 accepted risks in docs/21). When a decision changes, update the guide in the same change.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|
