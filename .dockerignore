@@ -1,0 +1,16 @@
+# Build context is the repo root (images need contracts/ and fixtures/). Never send secrets or local artefacts.
+.env
+.env.*
+!.env.example
+.git
+**/node_modules
+**/.next
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/test-results
+**/playwright-report
+.drift-check
+services/detection/models

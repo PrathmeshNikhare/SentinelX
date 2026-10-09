@@ -532,6 +532,40 @@ Whether the cited IDs actually exist is checked in Phase 10.
 - `qdrant_client(url, timeout, api_key)` always sends it. The AI service (`Settings.qdrant_api_key`) and the ingestion CLI refuse a missing or weak key (`validate_secret`, generalized from the service-token check). `verify.py` reads the key from the environment or `.env` for its collection check, without printing it.
 - The key travels over loopback HTTP; qdrant-client's insecure-connection warning is silenced for that reason only (`ponytail:` add TLS before Qdrant is reachable from another host). The reference `.env` received a generated key by append (never read or printed). The Qdrant container was recreated; its data volume and the 19 ingested documents were kept.
 
+### D-079 — The whole stack in Compose (Phase 13; completes D-023)
+- `docker compose --profile app up -d --build` adds five services. Plain `docker compose up -d` still starts only the infrastructure, so host development and `verify.py` are unchanged.
+  - `setup` (one-shot): `db:migrate`, `db:seed`, `db:roles`.
+  - `knowledge` (one-shot): `python -m sentinelx_ai.knowledge`.
+  - `ai`: internal only; binds 0.0.0.0 through the new `AI_SERVICE_HOST` but is not published to the host (D-022). Healthcheck on `/health`.
+  - `detection`: the worker on `kafka:29092`.
+  - `web`: published on `127.0.0.1:3000` only.
+  Compose sequences them: `setup` → `knowledge` → `ai`, with `kafka-init` before `detection` and `web`.
+- One `.env` stays the source of truth. Every app container gets it through `env_file`. `scripts/container-env.sh` (the entrypoint) rewrites only the host:port of the four database URLs from `localhost`/`127.0.0.1` to `postgres:5432`; other URLs (Kafka, Qdrant, AI service, Ollama) are set per service in Compose. Rejected: separate password variables (two sources that can disagree, and `db:roles` would reset role passwords to the wrong one) and app-code host overrides.
+- Images (build context = repo root; `.dockerignore` excludes `.env`, `.git`, `node_modules`, venvs, caches and model artefacts):
+  - web: multi-stage on `node:24.11.0-bookworm-slim`. Build with dev dependencies, then a fresh production-only `npm ci`, so the dev-only advisories (docs/21 10.2) never ship; `npm prune` was dropped because it fails on optional platform packages. Runs as `node`. 1.55 GB.
+  - detection: `python:3.12.5-slim-bookworm`, Isolation Forest trained at build time. Runs as uid 10001. 606 MB.
+  - ai: `python:3.12.5-slim-bookworm`; CPU torch from the PyTorch index (it satisfies the `torch==2.14.1` pin), then `requirements.txt`. The pinned embedding model is baked in at build and `HF_HUB_OFFLINE=1` at runtime. Runs as uid 10001. 2.28 GB.
+- Ollama stays on the host (GPU access), reached at `host.docker.internal:11434` with a `host-gateway` mapping. Verified from a container on Docker Desktop; on Linux Ollama must listen on `0.0.0.0`.
+- Finding: the Isolation Forest artefact is deterministic per platform, not across platforms. The Linux build's version hash is `iforest-v1-767255fe77ca` vs `bf36c4b809a6` on the Windows host, and scenario A scored risk 88 in the container vs 90 on the host. Both are CRITICAL with the same signals, as docs/12 expects. Alerts record `model_version`, so the difference is visible.
+- Every app container receives the whole `.env`, including secrets it does not use (accepted local risk, docs/21 3.6).
+
+### D-080 — Clean-machine and demo reproducibility (Phase 13)
+- `docs/22_DEMO.md` is the clean-machine path: prerequisites (Docker, host Ollama), secrets, one `up` command, analyst creation and `demo:send` through the `setup` container, the demo walkthrough, reset and troubleshooting. The README leads with it.
+- `apps/web/playwright.demo.config.ts` with `demo-check/demo.spec.ts` is the automated demo against a running stack (docs/08 E2E). It runs as an analyst through the browser and API:
+  1. ingest scenario A with a session;
+  2. wait for the incident that links its first event;
+  3. press Investigate and wait for completion;
+  4. require the trace, at least 9 evidence rows, and an accepted verdict whose cited IDs all resolve to evidence rows (or the review banner);
+  5. take a screenshot.
+  It is not part of `verify.py`, which stays the dev gate with the apps on the host.
+- Verified clean start (a separate Compose project with new empty volumes, images built from this commit):
+  - `up` 73 s;
+  - setup seeded 9 IPs and 11 techniques; knowledge ingested 19 documents; the AI model loaded offline;
+  - the demo check passed in 1.8 min: incident with 9 events and 5 alerts, risk 88 CRITICAL; investigation completed in 81 s; CRITICAL verdict citing 18 existing evidence IDs and T1078/T1110 with no findings;
+  - scenario B through `demo:send` stored 4 events with no alert and no incident;
+  - the project was then removed with its volumes.
+- `verify.py` now runs pytest with `--tb=line -rf`, so a failure's one-line reason survives its summary. That is how the one Phase 13 gate failure was diagnosed: the live test's own two-second status poll hit a PostgreSQL connect timeout while the machine had about 1 GB of memory available. The poll now treats a connection error as "still running", bounded by the same deadline.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|

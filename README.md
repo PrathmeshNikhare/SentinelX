@@ -9,11 +9,22 @@ AI-assisted security-log analysis and evidence-based threat investigation. A por
 - `contracts/v1/` — versioned cross-service JSON Schemas.
 - `fixtures/` — deterministic synthetic data.
 - `scripts/` — `verify.py`, the single verification entrypoint.
-- `docker-compose.yml` — PostgreSQL, Kafka (KRaft), Qdrant.
+- `docker-compose.yml` — PostgreSQL, Kafka (KRaft), Qdrant; with `--profile app` also the web console, detection worker and AI service (D-079).
 - `CLAUDE.md`, `.claude/`, `docs/`, `progress/` — the Claude Code harness: constitution, agents, commands, specs, project state and handoffs.
 
-## Quickstart
-Prerequisites and Windows/POSIX details: `docs/16_ENVIRONMENT.md`.
+## Run the demo (clean machine)
+Docker plus Ollama on the host (`ollama pull llama3.2:3b`), nothing else. Full steps, the demo story and an automated check: `docs/22_DEMO.md`.
+
+```sh
+cp .env.example .env                 # then set AI_SERVICE_TOKEN, QDRANT_API_KEY, INGEST_API_TOKEN (32+ random chars each)
+docker compose --profile app up -d --build                      # http://localhost:3000
+docker compose --profile app run --rm -e ANALYST_PASSWORD='<12+ chars>' setup npm run --silent analyst:create -- analyst@sentinelx.local "Demo Analyst"
+docker compose --profile app run --rm setup npm run --silent demo:send -- A --url http://web:3000
+```
+Sign in, open the new incident, press **Investigate**.
+
+## Quickstart (development)
+Apps on the host, infrastructure in Compose. Prerequisites and Windows/POSIX details: `docs/16_ENVIRONMENT.md`.
 
 ```sh
 cp .env.example .env                 # PowerShell: Copy-Item .env.example .env

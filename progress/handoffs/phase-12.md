@@ -1,7 +1,7 @@
 # Phase 12 — Security & Reliability — Handoff
 
 PHASE: 12
-STATUS: READY_FOR_NEXT_PHASE
+STATUS: COMPLETE (receiver accepted 2026-10-09 at Phase 13 start: db:roles ok, verify.py 24/24, Qdrant 401 without key, verify self-test OK)
 GATE: `/verify-phase` APPROVED (2026-10-09)
 BASE COMMIT: `1e59907` (Phase 11). Phase 12 is the commit that adds this file.
 PREVIOUS PHASE: 11 accepted as COMPLETE at the start of this phase (db:roles ok, verify.py 24/24 incl. the E2E walkthrough), after Docker Desktop was restarted by the user.

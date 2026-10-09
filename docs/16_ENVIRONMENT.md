@@ -92,6 +92,9 @@ Events reach PostgreSQL (the console's Events page), and alerting events become 
 ## Detection worker (Phase 04)
 In `services/detection`, train the model once (`python -m sentinelx_detection.train`; deterministic, about 3 s), then run `python -m sentinelx_detection.worker`. Use `--idle-exit 15` to process the backlog and exit. It consumes `security-events`, stores events, detection signals, alerts and incidents as `sentinelx_app`, and logs one JSON line per event with signals, anomaly, risk, the alert decision and the correlation action. To rebuild alerts and incidents for events processed by an older version, replay with a new consumer group: `python -m sentinelx_detection.worker --group backfill-<name> --idle-exit 15` (idempotent, D-055). See `services/detection/README.md`.
 
+## Full stack in Compose (Phase 13)
+`docker compose --profile app up -d --build` runs the web console, detection worker and AI service in containers next to the infrastructure (D-079). See `docs/22_DEMO.md` for the clean-machine demo. Stop the host dev server first: the `web` container publishes port 3000. Plain `docker compose up -d` (no profile) keeps the development setup described here.
+
 ## AI service (Phase 06)
 1. Put a random token of 32+ characters in `.env` as `AI_SERVICE_TOKEN`: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The service refuses to start without one.
 2. Make sure Ollama is running with `OLLAMA_MODEL` pulled (`ollama pull llama3.2:3b`).

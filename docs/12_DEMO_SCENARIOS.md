@@ -12,4 +12,6 @@ Unusual time/IP without known malicious command. Expected anomaly and cautious v
 
 Every scenario must be generated deterministically from fixtures/scripts.
 
+Phase 13 (D-080): `docs/22_DEMO.md` runs these on the containerized stack, and `apps/web/demo-check/` automates scenario A end to end.
+
 Implemented in Phase 03 (D-044): `fixtures/scenarios/scenario-{a,b,c}.json` (offsets in seconds, synthetic IPs only) and `npm run demo:send -- <A|B|C> [--base <ISO>] [--url <base-url>]`, which posts each event to `POST /api/events`. Event IDs are `demo-<scenario>-<base>-<nn>`, so the same base reproduces the same events.

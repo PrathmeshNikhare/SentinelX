@@ -1,5 +1,6 @@
-# SentinelX local infrastructure (D-023). App processes and Ollama run on the host.
-# Ports bind to 127.0.0.1 only. Copy .env.example to .env before running.
+# SentinelX (D-023, D-079). Ports bind to 127.0.0.1 only. Copy .env.example to .env and set its secrets first.
+#   docker compose up -d                          infrastructure only (development: apps run on the host)
+#   docker compose --profile app up -d --build    the whole stack (clean-machine demo); Ollama stays on the host
 name: sentinelx
 
 services:
@@ -81,6 +82,84 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # --- App services (Phase 13, D-079). Images build from the repo root; .env supplies credentials, and
+  # scripts/container-env.sh rewrites the database URLs to postgres:5432 inside the network. ---
+
+  # One-shot: migrations, reference data and role logins (as `npm run db:migrate && db:seed && db:roles`).
+  setup:
+    profiles: [app]
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    image: sentinelx-web:local
+    env_file: .env
+    command: ["sh", "-c", "npm run --silent db:migrate && npm run --silent db:seed && npm run --silent db:roles"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  # One-shot: knowledge corpus into knowledge_documents and Qdrant (python -m sentinelx_ai.knowledge).
+  knowledge:
+    profiles: [app]
+    build: { context: ., dockerfile: services/ai/Dockerfile }
+    image: sentinelx-ai:local
+    env_file: .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+    command: ["python", "-m", "sentinelx_ai.knowledge"]
+    depends_on:
+      setup: { condition: service_completed_successfully }
+      qdrant: { condition: service_healthy }
+    restart: "no"
+
+  # Internal only: reachable as http://ai:8000 on the Compose network, never published to the host (D-022).
+  ai:
+    profiles: [app]
+    build: { context: ., dockerfile: services/ai/Dockerfile }
+    image: sentinelx-ai:local
+    env_file: .env
+    environment:
+      AI_SERVICE_HOST: 0.0.0.0
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      knowledge: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 20
+    restart: unless-stopped
+
+  detection:
+    profiles: [app]
+    build: { context: ., dockerfile: services/detection/Dockerfile }
+    image: sentinelx-detection:local
+    env_file: .env
+    environment:
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      setup: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  web:
+    profiles: [app]
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    image: sentinelx-web:local
+    env_file: .env
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      AI_SERVICE_URL: http://ai:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      setup: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
+      ai: { condition: service_healthy }
+    restart: unless-stopped
 
 volumes:
   pgdata:

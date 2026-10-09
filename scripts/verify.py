@@ -309,7 +309,8 @@ def check_python_service(rel: str) -> list[Result]:
     return [
         command_check(f"{label}: ruff", [py, "-m", "ruff", "check", "."], cwd=service),
         command_check(f"{label}: mypy", [py, "-m", "mypy"], cwd=service),
-        command_check(f"{label}: pytest", [py, "-m", "pytest", "-q"], cwd=service),
+        # One line per failure (--tb=line -rf) so the assertion survives the summary's tail (Phase 13).
+        command_check(f"{label}: pytest", [py, "-m", "pytest", "-q", "--tb=line", "-rf"], cwd=service),
     ]
 
 

@@ -1,4 +1,7 @@
-"""Usage: python -m sentinelx_ai   (serves on 127.0.0.1:8000 by default; internal only, D-022)."""
+"""Usage: python -m sentinelx_ai   (127.0.0.1:8000 by default; internal only, D-022).
+
+AI_SERVICE_HOST=0.0.0.0 is for the Compose network only, where the port is not published (D-079).
+"""
 
 from __future__ import annotations
 
@@ -42,9 +45,10 @@ def main() -> int:
 
     threading.Thread(target=warm, daemon=True).start()  # the service answers while the model loads
     port = int(os.environ.get("AI_SERVICE_PORT") or 8000)
-    log("info", "ai.starting", host="127.0.0.1", port=port, model=settings.ollama_model)
+    host = os.environ.get("AI_SERVICE_HOST") or "127.0.0.1"
+    log("info", "ai.starting", host=host, port=port, model=settings.ollama_model)
     app = create_app(settings, store=store, retriever=retriever)
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
     return 0
 
 

@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
+import psycopg
 import pytest
 import uvicorn
 from psycopg.types.json import Jsonb
@@ -149,6 +150,15 @@ def run_row(owner_url: str, run_id: str) -> dict[str, Any]:
     return dict(zip(names, row, strict=True))
 
 
+def poll_run(owner_url: str, run_id: str) -> dict[str, Any]:
+    """One status poll. A connection timeout of the test's own poll under memory pressure counts as "still running";
+    the deadline still bounds the wait (seen once in Phase 13, D-080)."""
+    try:
+        return run_row(owner_url, run_id)
+    except psycopg.OperationalError:
+        return {"status": "running"}
+
+
 def test_demo_incident_is_investigated_asynchronously_with_a_schema_valid_verdict(
     service: str, database: Stack
 ) -> None:
@@ -165,7 +175,7 @@ def test_demo_incident_is_investigated_asynchronously_with_a_schema_valid_verdic
     assert duplicate.status_code == 409
 
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
-    while (run := run_row(database.owner_url, run_id))["status"] in ("queued", "running"):
+    while (run := poll_run(database.owner_url, run_id))["status"] in ("queued", "running"):
         assert time.monotonic() < deadline, "the investigation did not finish"
         time.sleep(2)
     elapsed = time.monotonic() - started
