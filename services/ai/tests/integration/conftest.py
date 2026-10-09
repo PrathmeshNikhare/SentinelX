@@ -20,8 +20,10 @@ import pytest
 from psycopg import sql
 
 from sentinelx_ai.config import REPO_ROOT, load_root_env
+from sentinelx_ai.knowledge import IngestCounts, SentenceEmbedder, ingest, qdrant_client
 
 DB_PREFIX = "sentinelx_ai_test_"
+COLLECTION_PREFIX = "sentinelx_test_knowledge_"
 STALE_AFTER_SECONDS = 3600
 
 
@@ -101,3 +103,29 @@ def database(request: pytest.FixtureRequest) -> Iterator[Stack]:
     finally:
         with owner_connect(owner) as conn:
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name)))
+
+
+@dataclass(frozen=True)
+class Knowledge:
+    qdrant_url: str
+    collection: str
+    embedder: SentenceEmbedder
+    counts: IngestCounts
+
+
+@pytest.fixture(scope="module")
+def knowledge(database: Stack) -> Iterator[Knowledge]:
+    """The real corpus ingested with the real model into a throwaway Qdrant collection (D-070, D-071)."""
+    url = os.environ.get("QDRANT_URL") or "http://localhost:6333"
+    client = qdrant_client(url, 30)
+    for existing in client.get_collections().collections:
+        stamp = existing.name.rsplit("_", 1)[-1]
+        stale = stamp.isdigit() and time.time() - int(stamp) > STALE_AFTER_SECONDS
+        if existing.name.startswith(COLLECTION_PREFIX) and stale:
+            client.delete_collection(existing.name)
+    collection = f"{COLLECTION_PREFIX}{os.getpid()}_{int(time.time())}"
+    embedder = SentenceEmbedder()
+    try:
+        yield Knowledge(url, collection, embedder, ingest(database.owner_url, client, collection, embedder))
+    finally:
+        client.delete_collection(collection)

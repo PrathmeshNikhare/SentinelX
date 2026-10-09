@@ -24,6 +24,7 @@ INFRA_SERVICES = ("postgres", "kafka", "qdrant")
 PYTHON_SERVICES = ("services/detection", "services/ai")
 KAFKA_TOPIC = "security-events"
 QDRANT_READY_URL = "http://localhost:6333/readyz"
+KNOWLEDGE_COLLECTION_URL = "http://127.0.0.1:6333/collections/security_knowledge"  # D-071
 POSTGRES_SSL_REQUEST = struct.pack("!ii", 8, 80877103)
 
 PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
@@ -215,6 +216,21 @@ def check_qdrant() -> Result:
     return Result("qdrant /readyz", PASS if status == 200 else FAIL, f"HTTP {status}")
 
 
+def check_knowledge() -> Result:
+    """Phase 09: the corpus must be ingested (python -m sentinelx_ai.knowledge) for knowledge search to work."""
+    name = "qdrant: knowledge collection ingested"
+    fixtures = ROOT / "fixtures"
+    expected = len(json.loads((fixtures / "mitre_techniques.json").read_text(encoding="utf-8"))["techniques"])
+    expected += len(json.loads((fixtures / "knowledge" / "playbooks.json").read_text(encoding="utf-8"))["documents"])
+    try:
+        with urllib.request.urlopen(KNOWLEDGE_COLLECTION_URL, timeout=5) as response:
+            points = json.load(response)["result"]["points_count"]
+    except (OSError, ValueError, KeyError):
+        return Result(name, FAIL, "missing: run (cd services/ai && python -m sentinelx_ai.knowledge)")
+    ok = points == expected
+    return Result(name, PASS if ok else FAIL, f"{points}/{expected} documents" + ("" if ok else "; re-run ingestion"))
+
+
 def check_ollama() -> Result:
     # Required from Phase 06 (the AI service). The configured model is checked by the AI service's live test.
     url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/") + "/api/tags"
@@ -294,6 +310,7 @@ def main() -> int:
         check_postgres(),
         check_kafka(),
         check_qdrant(),
+        check_knowledge(),
         check_ollama(),
         *check_web(),
     ]

@@ -1,7 +1,7 @@
 # Phase 08 — LangGraph Investigation — Handoff
 
 PHASE: 08
-STATUS: READY_FOR_NEXT_PHASE
+STATUS: COMPLETE (receiver accepted 2026-10-09 at Phase 09 start: db:roles ok, verify.py 23/23 incl. ai pytest with the live investigation test)
 GATE: `/verify-phase` APPROVED (2026-10-09)
 BASE COMMIT: `5623cb4` (Phase 07). Phase 08 is the commit that adds this file.
 PREVIOUS PHASE: 07 accepted as COMPLETE at the start of this phase (db:roles ok, verify.py 23/23, ai pytest 122/122).

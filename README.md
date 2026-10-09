@@ -5,7 +5,7 @@ AI-assisted security-log analysis and evidence-based threat investigation. A por
 ## Layout
 - `apps/web/` — Next.js console (Phase 02: auth, navigation, incident/event views, API); Drizzle schema, migrations and seeds (Phase 01).
 - `services/detection/` — Python detection worker: rules, Isolation Forest, risk engine (Phase 04).
-- `services/ai/` — Python FastAPI AI service: internal auth, contracts, Ollama adapter (Phase 06), read-only agent tools (Phase 07), LangGraph investigations with trace and evidence (Phase 08).
+- `services/ai/` — Python FastAPI AI service: internal auth, contracts, Ollama adapter (Phase 06), read-only agent tools (Phase 07), LangGraph investigations with trace and evidence (Phase 08), knowledge retrieval over Qdrant (Phase 09).
 - `contracts/v1/` — versioned cross-service JSON Schemas.
 - `fixtures/` — deterministic synthetic data.
 - `scripts/` — `verify.py`, the single verification entrypoint.
@@ -25,6 +25,7 @@ python scripts/verify.py
 (cd apps/web && npm run dev)       # http://localhost:3000
 (cd apps/web && npm run demo:send -- A)   # needs INGEST_API_TOKEN in .env (docs/16)
 (cd services/detection && .venv/bin/python -m sentinelx_detection.train && .venv/bin/python -m sentinelx_detection.worker)
+(cd services/ai && .venv/bin/python -m sentinelx_ai.knowledge)   # ingest the knowledge corpus into Qdrant (once, idempotent)
 (cd services/ai && .venv/bin/python -m sentinelx_ai)   # needs AI_SERVICE_TOKEN, AI_TOOLS_/AI_WRITER_DATABASE_URL (npm run db:roles) and Ollama
 ```
 

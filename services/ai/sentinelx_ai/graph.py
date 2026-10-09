@@ -35,6 +35,7 @@ RECURSION_LIMIT: Final = 4 * MAX_STEPS + 10  # LangGraph safety net above the st
 HISTORY_LOOKBACK: Final = timedelta(hours=24)
 MAX_PLAN_IPS: Final = 3
 MAX_PLAN_TECHNIQUES: Final = 4
+KNOWLEDGE_TOP_K: Final = 3
 MAX_TRACED_PROPOSAL_CHARS: Final = 2000  # model output stored in the trace stays bounded
 
 # Candidate ATT&CK techniques per detection rule: a starting point for evidence gathering, not a verdict (D-066).
@@ -136,7 +137,7 @@ def canonical(tool: str, arguments: Mapping[str, Any]) -> Action:
 
 
 def fallback_plan(ctx: IncidentContext, available: list[str]) -> list[Action]:
-    """User history, reputation of the incident's IPs, related logs for the primary IP, candidate techniques."""
+    """User history, reputation of the incident's IPs, related logs, a knowledge search, candidate techniques."""
     incident, events = ctx.incident, ctx.events
     times = [e["occurred_at"] for e in events] or [incident["started_at"]]
     end = max(times) + timedelta(minutes=1)
@@ -145,7 +146,8 @@ def fallback_plan(ctx: IncidentContext, available: list[str]) -> list[Action]:
 
     candidates = [incident["primary_ip"], *(e["source_ip"] for e in events)]
     ips = [ip for ip in dict.fromkeys(candidates) if ip][:MAX_PLAN_IPS]
-    techniques = list(dict.fromkeys(t for e in events for rule in e["signals"] for t in RULE_TECHNIQUES.get(rule, ())))
+    rules = list(dict.fromkeys(rule for e in events for rule in e["signals"]))
+    techniques = list(dict.fromkeys(t for rule in rules for t in RULE_TECHNIQUES.get(rule, ())))
 
     plan: list[tuple[str, dict[str, Any]]] = []
     if incident["primary_user_id"]:
@@ -153,6 +155,9 @@ def fallback_plan(ctx: IncidentContext, available: list[str]) -> list[Action]:
     plan += [("get_ip_reputation", {"ip": ip}) for ip in ips]
     if ips:
         plan.append(("get_related_logs", {"source_ip": ips[0], **window}))
+    if rules:  # retrieved guidance for what detection saw (D-072)
+        query = clip(f"{incident['title']}: {', '.join(r.replace('_', ' ') for r in rules)}", 300)
+        plan.append(("search_security_knowledge", {"query": query, "top_k": KNOWLEDGE_TOP_K}))
     plan += [("get_mitre_technique", {"technique_id": t}) for t in techniques[:MAX_PLAN_TECHNIQUES]]
     return [canonical(tool, args) for tool, args in plan if tool in available]
 

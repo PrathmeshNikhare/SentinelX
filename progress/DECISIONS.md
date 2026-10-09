@@ -440,6 +440,35 @@ Whether the cited IDs actually exist is checked in Phase 10.
 - E2E servers point `AI_SERVICE_URL` at a closed port: the unavailable path is deterministic, and a run inserted as the owner exercises the read path. The live graph is covered by `services/ai/tests/integration/test_investigation_live.py`.
 - The `notImplemented` helper is removed: no placeholder endpoints remain.
 
+### D-070 — Embedding model and RAG stack (Phase 09; resolves the open Phase 09 decision)
+- Model: `sentence-transformers/all-MiniLM-L6-v2` at the pinned Hub commit `1110a243fdf4706b3f48f1d95db1a4f5529b4d41` (Apache-2.0). 384 dimensions, normalized embeddings, cosine distance, CPU. It is small and fast on CPU (about 0.1 s per query once loaded) and good enough for a 19-document corpus. A change of model or revision changes `content_hash`, and re-ingestion recreates the collection if the dimension changes.
+- Pins:
+  - `qdrant-client` 1.15.1, matching the Compose server 1.15.0 (D-029); 1.19 is newer than the server;
+  - `sentence-transformers` 6.1.0;
+  - `torch` 2.14.1 (the PyPI Windows wheel is CPU-only; `+cpu`, no CUDA);
+  - `transformers` 5.18.0 (5.19.0 was 3 days old).
+  The frozen runtime set is now 85 pins plus 3 Windows markers; OSV reported no advisories for the 94 venv packages. On Linux, PyPI `torch` pulls CUDA packages, so the Phase 13 image installs it from the PyTorch CPU index.
+- The model downloads from Hugging Face into the user cache on first load (about 90 MB; the only network access, once). A cold load took 19 s, mostly importing torch. `python -m sentinelx_ai` warms it in a background thread and logs `ai.embedding_model`, so the service answers immediately.
+- Qdrant URLs with `localhost` are rewritten to `127.0.0.1`. On Windows every call through `localhost` took 2 s more (IPv6 first, as in D-051). This cut the live retrieval tests from 103 s to 46 s.
+- The Qdrant client is created on the first search, because each construction costs about 0.5 s. The version check at construction is disabled (versions are pinned together).
+
+### D-071 — Knowledge corpus and ingestion (Phase 09)
+- One document = one retrieval unit = one `knowledge_documents` row (`kd_` ID) = one Qdrant point. Documents stay under 1,500 characters (the hit snippet bound), so there is no chunking.
+- Sources:
+  - `mitre-attack`: built at ingest from `fixtures/mitre_techniques.json`, so the curated technique text is not duplicated;
+  - `sentinelx-playbook`: 8 short defensive playbooks written for the project (`fixtures/knowledge/playbooks.json`), each listing related techniques from the curated set (tested).
+- `python -m sentinelx_ai.knowledge` runs as the owner (`DATABASE_URL`), like `npm run db:seed`. It upserts rows on `(source, external_id)`, so `kd_` IDs stay stable. It upserts points with ID `uuid5(namespace, "source:external_id")` and payload `{document_id, source, external_id, title, text, content_hash}`, and deletes rows and points that left the corpus. It is idempotent (tested). Evidence rows keep their own copy of a hit, so removing a document never breaks an old trace.
+- Collection `security_knowledge` (`KNOWLEDGE_COLLECTION` overrides; the tests use throwaway `sentinelx_test_knowledge_*` collections, swept after an hour). `verify.py` gains a 24th check: the collection holds exactly the corpus' document count.
+- Local Qdrant has no API key; it is published on 127.0.0.1 only (D-023). Authentication is Phase 12 hardening.
+
+### D-072 — Retrieval in the agent (Phase 09; implements D-018, D-063)
+- `QdrantRetriever` embeds the query and calls `query_points` with the 5 s tool timeout. Errors map to `TimeoutError` (client timeout) or `ConnectionError` (unreachable, HTTP error such as a missing collection, or embedding model unavailable). Each payload is validated into a `KnowledgeHit`; a point without a valid `kd_` reference is never returned.
+- `KnowledgeHit` gains `external_id` (e.g. `T1110`, `pb-encoded-powershell`), the human-readable source reference.
+- `search_security_knowledge` also checks hits against `knowledge_documents` as the tools role (`KNOWLEDGE_DOCUMENTS_SQL`, a fourth fixed SELECT) and drops any hit whose document is not stored. Every returned source exists.
+- `create_app` builds the retriever from settings, so the tool is offered to the agent (D-067 no longer applies at runtime). The fallback plan adds one knowledge search after related logs: top 3 hits for the incident title plus the detected rule names.
+- Evidence: one `knowledge` row per hit, `source_id` = `kd_` ID, claim `title (source external_id): snippet`. Hit IDs go to `retrieval_refs`.
+- Live: the scenario A investigation stored 3 knowledge evidence rows, and the verdict cited 20 of 20 existing IDs. The 5 smoke queries (worded without technique names or titles) return an expected source in their top 3.
+
 ## Open decisions (record before the owning phase starts)
 | Topic | Owning phase |
 |---|---|
@@ -448,4 +477,4 @@ Whether the cited IDs actually exist is checked in Phase 10.
 | ~~Isolation Forest feature list and alert threshold~~ — resolved by D-049, D-050 | 04 |
 | ~~Correlation window and grouping keys~~ — resolved by D-053 | 05 |
 | ~~Ollama model confirmation and structured-output mode~~ — resolved by D-056 | 06 |
-| Embedding model and vector dimension (default candidate `all-MiniLM-L6-v2`, 384-d, CPU torch) | 09 |
+| ~~Embedding model and vector dimension~~ — resolved by D-070 | 09 |

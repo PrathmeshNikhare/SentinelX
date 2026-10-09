@@ -16,10 +16,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .config import ConfigError, Settings
 from .contracts import InvestigationAccepted, InvestigationRequest
 from .graph import Deps, Investigator
+from .knowledge import QdrantRetriever, SentenceEmbedder, qdrant_client
 from .llm import LlmClient, OllamaClient
 from .log import log
 from .store import Store
-from .tools import ToolDatabase, build_tools
+from .tools import KNOWLEDGE_TIMEOUT_SECONDS, KnowledgeRetriever, ToolDatabase, build_tools
 
 PUBLIC_PATHS = frozenset({"/health"})
 MAX_BODY_BYTES = 16 * 1024
@@ -37,16 +38,26 @@ class Runner(Protocol):
     def run(self, run_id: str, incident_id: str) -> None: ...
 
 
+def default_retriever(settings: Settings) -> QdrantRetriever:
+    """Qdrant over the ingested collection (D-071); the embedding model loads on the first search."""
+    connect = lambda: qdrant_client(settings.qdrant_url, int(KNOWLEDGE_TIMEOUT_SECONDS))  # noqa: E731
+    return QdrantRetriever(connect, settings.knowledge_collection, SentenceEmbedder())
+
+
 def create_app(
-    settings: Settings, llm: LlmClient | None = None, store: Store | None = None, investigator: Runner | None = None
+    settings: Settings,
+    llm: LlmClient | None = None,
+    store: Store | None = None,
+    investigator: Runner | None = None,
+    retriever: KnowledgeRetriever | None = None,
 ) -> FastAPI:
     app = FastAPI(title="SentinelX AI service", docs_url=None, redoc_url=None, openapi_url=None)
     client: LlmClient = llm or OllamaClient(
         settings.ollama_base_url, settings.ollama_model, settings.ollama_timeout_seconds
     )
     runs = store or Store(settings.writer_database_url)
-    # Knowledge search is not offered until Phase 09 supplies a retriever (D-067).
-    tools = {t.name: t for t in build_tools(ToolDatabase(settings.tools_database_url), None)}
+    knowledge = retriever if retriever is not None else default_retriever(settings)
+    tools = {t.name: t for t in build_tools(ToolDatabase(settings.tools_database_url), knowledge)}
     runner: Runner = investigator if investigator is not None else Investigator(Deps(runs, client, tools))
     expected = _digest(settings.service_token)
 

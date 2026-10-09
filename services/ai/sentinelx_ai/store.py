@@ -9,17 +9,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Final, Literal
-from urllib.parse import urlsplit
 
 import psycopg
 from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 from pydantic_core import to_jsonable_python
 
-from .config import ConfigError
+from .config import ConfigError, pg_connect_options
 
 WRITER_ROLE: Final = "sentinelx_ai_writer"
-CONNECT_TIMEOUT_SECONDS: Final = 10  # D-051
 STATEMENT_TIMEOUT_MS: Final = 5000
 MAX_INCIDENT_EVENTS: Final = 20  # newest linked events loaded as initial evidence
 MAX_INCIDENT_ALERTS: Final = 10  # highest-risk linked alerts
@@ -129,13 +127,8 @@ class Store:
         self._url = url
 
     def _connect(self) -> psycopg.Connection[DictRow]:
-        extra: dict[str, Any] = {
-            "connect_timeout": CONNECT_TIMEOUT_SECONDS,
-            "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS} -c TimeZone=UTC",
-        }
-        if urlsplit(self._url).hostname == "localhost":
-            extra["hostaddr"] = "127.0.0.1"
-        conn = psycopg.connect(self._url, row_factory=dict_row, **extra)
+        session = f"-c statement_timeout={STATEMENT_TIMEOUT_MS} -c TimeZone=UTC"
+        conn = psycopg.connect(self._url, row_factory=dict_row, **pg_connect_options(self._url, session))
         row = conn.execute("SELECT current_user AS role").fetchone()
         if row is None or row["role"] != WRITER_ROLE:
             conn.close()

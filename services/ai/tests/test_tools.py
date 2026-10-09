@@ -36,15 +36,18 @@ WINDOW = {"start_time": START.isoformat(), "end_time": END.isoformat()}
 
 
 class FakeDb(ToolDatabase):
-    """Records every query; returns canned rows. No connection is ever opened."""
+    """Records every query; returns canned rows (knowledge documents exist unless listed in `unknown`)."""
 
-    def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
+    def __init__(self, rows: list[dict[str, Any]] | None = None, unknown: set[str] | None = None) -> None:
         super().__init__("postgresql://unused.invalid/none")
         self.rows = rows or []
+        self.unknown = unknown or set()
         self.calls: list[tuple[str, str, dict[str, Any]]] = []
 
     def fetch(self, tool: str, query: str, params: dict[str, Any]) -> list[DictRow]:
         self.calls.append((tool, query, params))
+        if query is tools.KNOWLEDGE_DOCUMENTS_SQL:
+            return [{"id": i} for i in params["ids"] if i not in self.unknown]
         return [dict(r) for r in self.rows]
 
 
@@ -62,7 +65,12 @@ class FakeRetriever:
 
 def hit(n: int) -> KnowledgeHit:
     return KnowledgeHit(
-        document_id=f"kd_{n:016x}", source="mitre", title=f"Doc {n}", snippet="Brute force guidance.", score=0.9
+        document_id=f"kd_{n:016x}",
+        source="mitre-attack",
+        external_id=f"T{1000 + n}",
+        title=f"Doc {n}",
+        snippet="Brute force guidance.",
+        score=0.9,
     )
 
 
@@ -269,6 +277,16 @@ def test_knowledge_search_passes_the_timeout_and_caps_hits() -> None:
     assert retriever.calls == [("brute force", 3, KNOWLEDGE_TIMEOUT_SECONDS)]
     assert [h["document_id"] for h in result["hits"]] == [f"kd_{n:016x}" for n in (1, 2, 3)]
     assert result["truncated"] is True
+    assert result["hits"][0]["external_id"] == "T1001"
+
+
+def test_knowledge_hits_without_a_stored_document_are_dropped() -> None:
+    db = FakeDb(unknown={f"kd_{2:016x}"})
+    result = by_name(db, FakeRetriever([hit(1), hit(2), hit(3)]))["search_security_knowledge"].invoke(
+        {"query": "brute"}
+    )
+    assert [h["document_id"] for h in result["hits"]] == [f"kd_{1:016x}", f"kd_{3:016x}"]
+    assert db.calls[-1][2] == {"ids": [f"kd_{n:016x}" for n in (1, 2, 3)]}
 
 
 @pytest.mark.parametrize(("error", "code"), [(TimeoutError(), "timeout"), (ConnectionError(), "unavailable")])
@@ -281,9 +299,11 @@ def test_knowledge_search_maps_retriever_failures(error: Exception, code: str) -
 
 def test_knowledge_hits_must_cite_knowledge_document_ids() -> None:
     with pytest.raises(ValidationError):
-        KnowledgeHit(document_id="ev_0000000000000001", source="mitre", title="t", snippet="s", score=0.5)
+        KnowledgeHit(document_id="ev_0000000000000001", source="m", external_id="T1", title="t", snippet="s", score=0.5)
     with pytest.raises(ValidationError):
-        KnowledgeHit(document_id="kd_0000000000000001", source="mitre", title="t", snippet="s", score=float("nan"))
+        KnowledgeHit(
+            document_id="kd_0000000000000001", source="m", external_id="T1", title="t", snippet="s", score=float("nan")
+        )
 
 
 @pytest.mark.parametrize(
@@ -338,7 +358,7 @@ def test_tools_module_has_no_shell_file_network_or_dynamic_sql_capability() -> N
     assert not calls & FORBIDDEN_CALLS
 
     queries = {name: getattr(tools, name) for name in dir(tools) if name.endswith("_SQL")}
-    assert set(queries) == {"EVENTS_SQL", "IP_REPUTATION_SQL", "MITRE_TECHNIQUE_SQL"}
+    assert set(queries) == {"EVENTS_SQL", "IP_REPUTATION_SQL", "MITRE_TECHNIQUE_SQL", "KNOWLEDGE_DOCUMENTS_SQL"}
     for name, text in queries.items():
         assert text.strip().upper().startswith("SELECT"), name
         assert ";" not in text and "{" not in text, name  # one statement, no format placeholders

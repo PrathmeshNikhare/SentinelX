@@ -48,6 +48,7 @@ foreach ($s in 'detection','ai') {
   Pop-Location
 }
 services\detection\.venv\Scripts\python -m sentinelx_detection.train   # run from services\detection
+services\ai\.venv\Scripts\python -m sentinelx_ai.knowledge                # run from services\ai; downloads the embedding model once
 
 python scripts\verify.py
 ```
@@ -66,6 +67,7 @@ for s in detection ai; do
   (cd "services/$s" && python3.12 -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt)
 done
 (cd services/detection && .venv/bin/python -m sentinelx_detection.train)
+(cd services/ai && .venv/bin/python -m sentinelx_ai.knowledge)   # downloads the embedding model once (~90 MB)
 
 python3 scripts/verify.py
 ```
@@ -96,6 +98,8 @@ In `services/detection`, train the model once (`python -m sentinelx_detection.tr
 3. In `services/ai`, run `python -m sentinelx_ai`; it serves on `127.0.0.1:8000`.
 
 The service needs `AI_TOOLS_DATABASE_URL` and `AI_WRITER_DATABASE_URL` (both enabled by `npm run db:roles`); it refuses to start otherwise, and at startup marks runs left unfinished by a previous process as failed (D-065). The integration tests create and drop their own `sentinelx_ai_test_*` databases.
+
+Knowledge (Phase 09): `python -m sentinelx_ai.knowledge` (owner role, idempotent) ingests the MITRE techniques and playbooks into `knowledge_documents` and the Qdrant collection `security_knowledge` (D-071). Re-run it after editing `fixtures/mitre_techniques.json` or `fixtures/knowledge/playbooks.json`; `verify.py` fails until it has run. The first run downloads `all-MiniLM-L6-v2` from Hugging Face into the user cache; the service then loads it from the cache, warmed in the background at startup (a cold load took about 19 s). The integration tests use throwaway `sentinelx_test_knowledge_*` collections.
 
 Investigation demo (Phase 08): run the web app and the AI service with the same `AI_SERVICE_TOKEN`, open an incident, press **Investigate**, and reload. `GET /api/investigations/<run id>` returns the status, verdict, trace and evidence. A run of the scenario A incident took about 60 s on the reference machine. Leave `LANGSMITH_TRACING`/`LANGCHAIN_TRACING_V2` unset: the service refuses to start when they are `true` (D-060).
 

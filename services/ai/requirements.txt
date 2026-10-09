@@ -1,19 +1,32 @@
-# Runtime dependencies for services/ai (D-057, D-060, D-064). Direct: fastapi, uvicorn, httpx, pydantic,
-# langchain-core, langgraph, psycopg[binary]. The rest are their frozen transitive dependencies.
+# Runtime dependencies for services/ai (D-057, D-060, D-064, D-070). Direct: fastapi, uvicorn, httpx, pydantic,
+# langchain-core, langgraph, psycopg[binary], qdrant-client, sentence-transformers, torch, transformers.
+# The rest are their frozen transitive dependencies. torch from PyPI is the CPU build on Windows; on Linux PyPI
+# pulls CUDA packages, so a Linux image installs torch from https://download.pytorch.org/whl/cpu (Phase 13).
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
 certifi==2026.7.22
 charset-normalizer==3.5.2
 click==8.5.0
+cloudpickle==3.1.2
 distro==1.9.0
 fastapi==0.141.1
+filelock==4.0.12
+fsspec==2026.9.0
+grpcio==1.84.0
 h11==0.16.0
+h2==4.4.1
+hf-xet==1.7.0
+hpack==4.2.0
 httpcore2==2.13.1
 httpcore==1.0.9
 httpx2==2.13.1
 httpx==0.28.1
+huggingface_hub==1.33.0
+hyperframe==6.1.0
 idna==3.20
+Jinja2==3.1.6
+joblib==1.6.0
 jsonpatch==1.33
 jsonpointer==3.2.0
 langchain-core==1.6.7
@@ -23,20 +36,46 @@ langgraph-prebuilt==1.1.0
 langgraph-sdk==0.4.6
 langgraph==1.2.14
 langsmith==0.14.4
+markdown-it-py==4.2.0
+MarkupSafe==3.0.4
+mdurl==0.1.2
+mpmath==1.3.0
+narwhals==2.26.0
+networkx==3.7
+numpy==2.5.3
 orjson==3.13.0
 ormsgpack==1.12.2
 packaging==26.3
+portalocker==3.2.0
+protobuf==7.36.2
 psycopg-binary==3.3.6
 psycopg==3.3.6
 pydantic==2.13.5
 pydantic_core==2.46.5
+Pygments==2.21.0
 PyYAML==6.0.3
+qdrant-client==1.15.1
+regex==2026.9.29
 requests-toolbelt==1.0.0
 requests==2.34.2
+rich==15.0.0
+safetensors==0.8.0
+scikit-learn==1.9.1
+scipy==1.18.1
+sentence-transformers==6.1.0
+setuptools==84.0.0
+shellingham==1.5.4
 sniffio==1.3.1
 starlette==1.7.0
+sympy==1.14.0
 tenacity==9.2.1
+threadpoolctl==3.7.0
+tokenizers==0.23.2
+torch==2.14.1
+tqdm==4.70.1
+transformers==5.18.0
 truststore==0.10.4
+typer==0.27.3
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 urllib3==2.8.0
@@ -47,3 +86,4 @@ xxhash==4.0.1
 zstandard==0.25.0
 colorama==0.4.6 ; platform_system == "Windows"  # click (uvicorn) on Windows
 tzdata==2026.5 ; sys_platform == "win32"  # psycopg on Windows
+pywin32==312 ; platform_system == "Windows"  # portalocker (qdrant-client) on Windows

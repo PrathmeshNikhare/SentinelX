@@ -25,9 +25,10 @@ from sentinelx_ai.app import create_app
 from sentinelx_ai.config import REPO_ROOT, ConfigError, Settings
 from sentinelx_ai.contracts import Verdict
 from sentinelx_ai.graph import MAX_STEPS, PROMPT_VERSION
+from sentinelx_ai.knowledge import QdrantRetriever, qdrant_client
 from sentinelx_ai.store import Store
 
-from .conftest import Stack, owner_connect
+from .conftest import Knowledge, Stack, owner_connect
 
 pytestmark = pytest.mark.integration
 
@@ -105,7 +106,7 @@ def free_port() -> int:
 
 
 @pytest.fixture(scope="module")
-def service(database: Stack) -> Iterator[str]:
+def service(database: Stack, knowledge: Knowledge) -> Iterator[str]:
     settings = Settings(
         service_token=TOKEN,
         ollama_base_url=os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434",
@@ -113,9 +114,14 @@ def service(database: Stack) -> Iterator[str]:
         ollama_timeout_seconds=float(os.environ.get("OLLAMA_TIMEOUT_SECONDS") or 120),
         tools_database_url=database.tools_url,
         writer_database_url=database.writer_url,
+        qdrant_url=knowledge.qdrant_url,
+        knowledge_collection=knowledge.collection,
     )
+    connect = lambda: qdrant_client(knowledge.qdrant_url, 5)  # noqa: E731
+    retriever = QdrantRetriever(connect, knowledge.collection, knowledge.embedder)  # model already loaded
+    app = create_app(settings, retriever=retriever)
     port = free_port()
-    server = uvicorn.Server(uvicorn.Config(create_app(settings), host="127.0.0.1", port=port, log_level="warning"))
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     deadline = time.monotonic() + 30
@@ -197,6 +203,7 @@ def test_demo_incident_is_investigated_asynchronously_with_a_schema_valid_verdic
                 "cited": len(verdict.evidence_ids),
                 "cited_existing": len(set(verdict.evidence_ids) & set(evidence)),
                 "mitre": verdict.mitre_techniques,
+                "knowledge_evidence": list(evidence.values()).count("knowledge"),
                 "steps": [(t[1], t[2], t[3], (t[4] or {}).get("reason")) for t in trace],
             }
         )

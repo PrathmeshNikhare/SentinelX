@@ -217,6 +217,16 @@ def test_fallback_plan_covers_history_reputation_related_logs_and_candidate_tech
     assert history["end_time"] == "2026-10-08T14:05:00Z"  # last event plus 1 min
 
 
+def test_fallback_plan_searches_knowledge_for_the_detected_rules_when_offered() -> None:
+    plan = fallback_plan(CONTEXT, ["get_related_logs", "search_security_knowledge"])
+    assert [a["tool"] for a in plan] == ["get_related_logs", "search_security_knowledge"]
+    assert plan[1]["arguments"] == {
+        "query": "Possible account compromise: alice: brute force attempts, login after failures, risky ip login, "
+        "suspicious powershell",
+        "top_k": 3,
+    }
+
+
 def test_fallback_plan_only_uses_available_tools_and_clamps_the_window() -> None:
     long = IncidentContext(
         CONTEXT.incident,

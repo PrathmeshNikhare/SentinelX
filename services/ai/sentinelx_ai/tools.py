@@ -11,17 +11,15 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Final, Literal, Protocol
-from urllib.parse import urlsplit
 
 import psycopg
 from langchain_core.tools import StructuredTool
 from psycopg.rows import DictRow, dict_row
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, IPvAnyAddress, model_validator
 
-from .config import ConfigError
+from .config import PG_CONNECT_TIMEOUT_SECONDS, ConfigError, pg_connect_options
 
 TOOLS_ROLE: Final = "sentinelx_ai_tools"
-CONNECT_TIMEOUT_SECONDS: Final = 10  # psycopg's default is unbounded (D-051)
 STATEMENT_TIMEOUT_MS: Final = 2000
 KNOWLEDGE_TIMEOUT_SECONDS: Final = 5.0
 MAX_WINDOW: Final = timedelta(days=7)
@@ -142,6 +140,7 @@ class MitreTechniqueResult(ToolOutput):
 class KnowledgeHit(ToolOutput):
     document_id: Annotated[str, Field(pattern=r"^kd_[0-9a-f]{16}$")]  # knowledge_documents.id (D-018, D-030)
     source: str = Field(min_length=1, max_length=64)
+    external_id: str = Field(min_length=1, max_length=128)  # source reference, e.g. T1110 or a playbook slug
     title: str = Field(min_length=1, max_length=300)
     snippet: str = Field(min_length=1, max_length=1500)
     score: float = Field(allow_inf_nan=False)
@@ -187,19 +186,18 @@ SELECT technique_id, name, tactics_json AS tactics, description, attack_version
 FROM mitre_techniques WHERE technique_id = %(technique_id)s
 """
 
+KNOWLEDGE_DOCUMENTS_SQL: Final = """
+SELECT id FROM knowledge_documents WHERE id = ANY(%(ids)s::text[])
+"""
+
 
 def connect_tools(url: str) -> psycopg.Connection[DictRow]:
     """Read-only session as `sentinelx_ai_tools`; refuses any other role (D-061).
 
     Grants are the enforcement (D-031); the read-only default is defense in depth. IPv4 for `localhost` (D-051).
     """
-    extra: dict[str, Any] = {
-        "connect_timeout": CONNECT_TIMEOUT_SECONDS,
-        "options": f"-c default_transaction_read_only=on -c statement_timeout={STATEMENT_TIMEOUT_MS} -c TimeZone=UTC",
-    }
-    if urlsplit(url).hostname == "localhost":
-        extra["hostaddr"] = "127.0.0.1"
-    conn = psycopg.connect(url, autocommit=True, row_factory=dict_row, **extra)
+    session = f"-c default_transaction_read_only=on -c statement_timeout={STATEMENT_TIMEOUT_MS} -c TimeZone=UTC"
+    conn = psycopg.connect(url, autocommit=True, row_factory=dict_row, **pg_connect_options(url, session))
     row = conn.execute("SELECT current_user AS role").fetchone()
     if row is None or row["role"] != TOOLS_ROLE:
         conn.close()
@@ -277,15 +275,20 @@ def get_mitre_technique(db: ToolDatabase, args: MitreTechniqueInput) -> MitreTec
     return MitreTechniqueResult.model_validate({**rows[0], "found": True})
 
 
-def search_security_knowledge(retriever: KnowledgeRetriever, args: KnowledgeSearchInput) -> KnowledgeResult:
+def search_security_knowledge(
+    db: ToolDatabase, retriever: KnowledgeRetriever, args: KnowledgeSearchInput
+) -> KnowledgeResult:
+    """Hits whose document is not in `knowledge_documents` are dropped: every result is a real source (D-072)."""
     tool = "search_security_knowledge"
     try:
         hits = list(retriever.search(args.query, args.top_k, KNOWLEDGE_TIMEOUT_SECONDS))
     except TimeoutError as error:
         raise ToolError(tool, "timeout", f"retrieval exceeded {KNOWLEDGE_TIMEOUT_SECONDS} s") from error
     except ConnectionError as error:
-        raise ToolError(tool, "unavailable", type(error).__name__) from error
-    return _fit(KnowledgeResult(hits=hits[: args.top_k], truncated=len(hits) > args.top_k), "hits")
+        raise ToolError(tool, "unavailable", str(error) or type(error).__name__) from error
+    truncated, hits = len(hits) > args.top_k, hits[: args.top_k]
+    known = {row["id"] for row in db.fetch(tool, KNOWLEDGE_DOCUMENTS_SQL, {"ids": [h.document_id for h in hits]})}
+    return _fit(KnowledgeResult(hits=[h for h in hits if h.document_id in known], truncated=truncated), "hits")
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -330,7 +333,7 @@ def build_tools(db: ToolDatabase, retriever: KnowledgeRetriever | None) -> list[
 
     Without a retriever (until Phase 09 supplies Qdrant) knowledge search is not offered at all (D-067).
     """
-    db_timeout = CONNECT_TIMEOUT_SECONDS + STATEMENT_TIMEOUT_MS / 1000
+    db_timeout = PG_CONNECT_TIMEOUT_SECONDS + STATEMENT_TIMEOUT_MS / 1000
     window = f"Window at most {MAX_WINDOW.days} days; limit 1-{MAX_ROWS} (default {DEFAULT_ROWS}); newest first."
     database_tools = [
         _tool(
@@ -368,7 +371,7 @@ def build_tools(db: ToolDatabase, retriever: KnowledgeRetriever | None) -> list[
         "search_security_knowledge",
         f"Semantic search over approved security knowledge. top_k 1-{MAX_TOP_K}. Hits carry document IDs.",
         KnowledgeSearchInput,
-        lambda a: search_security_knowledge(retriever, a),
+        lambda a: search_security_knowledge(db, retriever, a),
         KNOWLEDGE_TIMEOUT_SECONDS,
     )
     return [*database_tools, knowledge]

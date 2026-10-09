@@ -95,7 +95,7 @@ def tool_evidence(tool: str, arguments: dict[str, Any], result: dict[str, Any]) 
             (
                 "knowledge",
                 hit["document_id"],
-                f"{clip(hit['title'])} ({hit['source']}): {clip(hit['snippet'], 300)}",
+                f"{clip(hit['title'])} ({hit['source']} {hit['external_id']}): {clip(hit['snippet'], 300)}",
                 hit,
             )
             for hit in result["hits"]

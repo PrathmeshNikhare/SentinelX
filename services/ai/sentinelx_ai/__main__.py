@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 
 import psycopg
 import uvicorn
 
-from .app import create_app
+from .app import create_app, default_retriever
 from .config import ConfigError, Settings
 from .log import log
 from .store import Store
@@ -33,9 +34,17 @@ def main() -> int:
         return 1
     if abandoned:
         log("warn", "ai.runs_abandoned", count=abandoned)
+    retriever = default_retriever(settings)
+
+    def warm() -> None:
+        loaded = retriever.warm()
+        log("info" if loaded else "warn", "ai.embedding_model", loaded=loaded, collection=settings.knowledge_collection)
+
+    threading.Thread(target=warm, daemon=True).start()  # the service answers while the model loads
     port = int(os.environ.get("AI_SERVICE_PORT") or 8000)
     log("info", "ai.starting", host="127.0.0.1", port=port, model=settings.ollama_model)
-    uvicorn.run(create_app(settings, store=store), host="127.0.0.1", port=port, log_level="warning")
+    app = create_app(settings, store=store, retriever=retriever)
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0
 
 
