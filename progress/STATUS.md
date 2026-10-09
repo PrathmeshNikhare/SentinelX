@@ -1,19 +1,19 @@
 # SentinelX Project Status
 
 STATUS: READY_FOR_NEXT_PHASE
-CURRENT_PHASE: 09
+CURRENT_PHASE: 10
 PHASE_GATE: APPROVED
-LAST_VERIFIED_HANDOFF: progress/handoffs/phase-09.md
+LAST_VERIFIED_HANDOFF: progress/handoffs/phase-10.md
 BLOCKERS: NONE
 
 ## Current objective
-Phase 09 — RAG / MITRE is ready for receiver verification.
+Phase 10 — Evidence-Grounded Verdict is ready for receiver verification.
 
 ## Last completed work
-2026-10-09 Phase 09: knowledge corpus (11 curated MITRE techniques + 8 project-written playbooks), `all-MiniLM-L6-v2` embeddings (pinned commit, CPU), Qdrant collection `security_knowledge` via the owner-role ingestion CLI, `QdrantRetriever` with source references (`kd_` ID, source, external ID) checked against `knowledge_documents`, knowledge search in the agent's fallback plan, 24th verify check; D-070–D-072. Phase 08 accepted as COMPLETE.
+2026-10-09 Phase 10: grounded verdict validation (cited evidence IDs must be the run's evidence; MITRE IDs must be curated and retrieved; IDs in the prose must resolve; severity one level apart noted, two or more forces review), retry naming failed references, every attempt kept for audit with structured findings, prompt `investigation-v2`; D-073. Live: 3/3 runs grounded on the first attempt. Phase 09 accepted as COMPLETE.
 
 ## Next action
-Run `/start-phase 10`: verify the Phase 09 handoff, mark it COMPLETE or REJECTED, then implement Phase 10 — Evidence-Grounded Verdict.
+Run `/start-phase 11`: verify the Phase 10 handoff, mark it COMPLETE or REJECTED, then implement Phase 11 — Incident UI.
 
 ## Verification
-`python scripts/verify.py` -> 24 checks, 0 failed. `services/ai` pytest 173 passed.
+`python scripts/verify.py` -> 24 checks, 0 failed. `services/ai` pytest 194 passed.

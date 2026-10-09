@@ -173,7 +173,8 @@ def test_demo_incident_is_investigated_asynchronously_with_a_schema_valid_verdic
     assert run["requires_review"] is False, run["validation_errors_json"]
     verdict = Verdict.model_validate(run["verdict_json"])
     assert run["model_name"] and run["prompt_version"] == PROMPT_VERSION
-    assert run["raw_output_json"]["attempts"][-1] == {"valid": True, "output": run["verdict_json"]}
+    final = run["raw_output_json"]["attempts"][-1]
+    assert final["valid"] is True and final["output"] == run["verdict_json"]
 
     with owner_connect(database.owner_url) as conn:
         trace = conn.execute(
@@ -186,12 +187,24 @@ def test_demo_incident_is_investigated_asynchronously_with_a_schema_valid_verdic
                 "SELECT id, source_type::text FROM evidence WHERE investigation_run_id = %s", (run_id,)
             ).fetchall()
         )
+        supported = {  # D-073: found MITRE lookups and MITRE knowledge hits of this run
+            row[0]
+            for row in conn.execute(
+                "SELECT CASE WHEN source_type = 'mitre' THEN source_id ELSE data_json->>'external_id' END "
+                "FROM evidence WHERE investigation_run_id = %s "
+                "AND ((source_type = 'mitre' AND (data_json->>'found')::boolean) "
+                "OR (source_type = 'knowledge' AND data_json->>'source' = 'mitre-attack'))",
+                (run_id,),
+            ).fetchall()
+        }
     assert [t[0] for t in trace] == list(range(len(trace)))
     assert trace[0][1] == "load_incident" and [t[1] for t in trace[-2:]] == ["build_verdict", "validate_verdict"]
     calls = [t for t in trace if t[1] == "tool_call"]
     assert 1 <= len(calls) <= MAX_STEPS
     assert all(t[2] in ("llm", "fallback") for t in trace if t[1] in ("choose_action", "tool_call"))
     assert {sid for t in trace for sid in t[5]} <= set(evidence)  # the trace only references stored evidence
+    assert set(verdict.evidence_ids) <= set(evidence)  # grounded: every cited ID is this run's evidence
+    assert set(verdict.mitre_techniques) <= supported
     assert list(evidence.values()).count("event") == 9 and list(evidence.values()).count("alert") == 4
 
     print(  # recorded in the Phase 08 handoff (pytest -s)
@@ -204,6 +217,8 @@ def test_demo_incident_is_investigated_asynchronously_with_a_schema_valid_verdic
                 "cited_existing": len(set(verdict.evidence_ids) & set(evidence)),
                 "mitre": verdict.mitre_techniques,
                 "knowledge_evidence": list(evidence.values()).count("knowledge"),
+                "attempts": len(run["raw_output_json"]["attempts"]),
+                "findings": run["validation_errors_json"],
                 "steps": [(t[1], t[2], t[3], (t[4] or {}).get("reason")) for t in trace],
             }
         )

@@ -58,7 +58,9 @@ def create_app(
     runs = store or Store(settings.writer_database_url)
     knowledge = retriever if retriever is not None else default_retriever(settings)
     tools = {t.name: t for t in build_tools(ToolDatabase(settings.tools_database_url), knowledge)}
-    runner: Runner = investigator if investigator is not None else Investigator(Deps(runs, client, tools))
+    tool_db = ToolDatabase(settings.tools_database_url)
+    deps = Deps(runs, client, tools, tool_db)
+    runner: Runner = investigator if investigator is not None else Investigator(deps)
     expected = _digest(settings.service_token)
 
     @app.middleware("http")

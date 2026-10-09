@@ -13,7 +13,7 @@ Core tables:
 - `incidents` (`inc_`): id, title, status (default `open`), risk_score (0–100), severity, primary_user_id, primary_ip (inet), started_at, updated_at, created_at
 - `incident_events`: incident_id, event_id (composite PK)
 - `incident_alerts`: incident_id, alert_id (composite PK)
-- `investigation_runs` (`run_`): id, incident_id, status (default `queued`), requires_review (default false), verdict_json (accepted verdict only), raw_output_json, validation_errors_json, model_name, prompt_version, error_message, started_at, completed_at, created_at (D-015, D-019)
+- `investigation_runs` (`run_`): id, incident_id, status (default `queued`), requires_review (default false), verdict_json (accepted verdict only), raw_output_json (`{attempts: [{valid, output | raw, error?, findings}]}`), validation_errors_json (`[{attempt, code, detail, effect}]`), model_name, prompt_version, error_message, started_at, completed_at, created_at (D-015, D-019, D-073)
 - `investigation_trace` (`trc_`): id, investigation_run_id, step_index (≥0, unique per run), action_type, action_origin (`llm|fallback`, null for system nodes), tool_name, input_json, result_json, evidence_ids_json, retrieval_refs_json, created_at
 - `evidence` (`ev_`): id, investigation_run_id, source_type, source_id, claim, data_json, created_at (D-018)
 - `knowledge_documents` (`kd_`): id, source, external_id, title, content_hash, qdrant_point_id, metadata_json, created_at; unique (source, external_id)

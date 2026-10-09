@@ -358,7 +358,13 @@ def test_tools_module_has_no_shell_file_network_or_dynamic_sql_capability() -> N
     assert not calls & FORBIDDEN_CALLS
 
     queries = {name: getattr(tools, name) for name in dir(tools) if name.endswith("_SQL")}
-    assert set(queries) == {"EVENTS_SQL", "IP_REPUTATION_SQL", "MITRE_TECHNIQUE_SQL", "KNOWLEDGE_DOCUMENTS_SQL"}
+    assert set(queries) == {
+        "EVENTS_SQL",
+        "IP_REPUTATION_SQL",
+        "MITRE_TECHNIQUE_SQL",
+        "KNOWLEDGE_DOCUMENTS_SQL",
+        "KNOWN_TECHNIQUES_SQL",
+    }
     for name, text in queries.items():
         assert text.strip().upper().startswith("SELECT"), name
         assert ";" not in text and "{" not in text, name  # one statement, no format placeholders

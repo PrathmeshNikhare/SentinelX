@@ -12,7 +12,7 @@ All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error
 | `PATCH /api/incidents/:id` | implemented (Phase 05, D-054): body exactly `{"status": "open"\|"investigating"\|"resolved"}` → 200 `{incident: {id, status}}`; 400 bad body, 404, 409 `invalid_transition` with `current`, 413, 415 |
 | `POST /api/events` | implemented (Phase 03): see below |
 | `POST /api/incidents/:id/investigate` | implemented (Phase 08, D-069): 202 `{investigation_run_id}`; 404 unknown incident; 409 `investigation_in_progress`; 503 AI service unavailable |
-| `GET /api/investigations/:id` | implemented (Phase 08, D-069): `{investigation: {id, incidentId, status, requiresReview, verdict, validationErrors, modelName, promptVersion, errorMessage, createdAt, startedAt, completedAt, trace: [...], evidence: [...]}}`; 404 malformed/unknown |
+| `GET /api/investigations/:id` | implemented (Phase 08, D-069): `{investigation: {id, incidentId, status, requiresReview, verdict, validationErrors ([{attempt, code, detail, effect}], D-073), modelName, promptVersion, errorMessage, createdAt, startedAt, completedAt, trace: [...], evidence: [...]}}`; 404 malformed/unknown |
 
 `POST /api/events`
 ```json

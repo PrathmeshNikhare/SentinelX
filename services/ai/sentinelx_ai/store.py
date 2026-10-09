@@ -225,7 +225,7 @@ class Store:
         requires_review: bool,
         verdict: dict[str, Any] | None = None,
         raw_output: Any = None,
-        validation_errors: list[str] | None = None,
+        validation_errors: list[Any] | None = None,
         error_message: str | None = None,
     ) -> None:
         with self._connect() as conn:

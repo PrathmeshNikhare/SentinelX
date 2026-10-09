@@ -190,6 +190,10 @@ KNOWLEDGE_DOCUMENTS_SQL: Final = """
 SELECT id FROM knowledge_documents WHERE id = ANY(%(ids)s::text[])
 """
 
+KNOWN_TECHNIQUES_SQL: Final = """
+SELECT technique_id FROM mitre_techniques WHERE technique_id = ANY(%(ids)s::text[])
+"""
+
 
 def connect_tools(url: str) -> psycopg.Connection[DictRow]:
     """Read-only session as `sentinelx_ai_tools`; refuses any other role (D-061).
@@ -266,6 +270,14 @@ def get_ip_reputation(db: ToolDatabase, args: IpReputationInput) -> IpReputation
     if not rows:
         return IpReputationResult(ip=ip, known=False, reputation="unknown", score=None, tags=[], source=None)
     return IpReputationResult.model_validate({**rows[0], "ip": ip, "known": True})
+
+
+def known_techniques(db: ToolDatabase, technique_ids: list[str]) -> set[str]:
+    """Which IDs exist in the curated set (verdict validation, D-073). Not an agent tool."""
+    if not technique_ids:
+        return set()
+    rows = db.fetch("verdict_validation", KNOWN_TECHNIQUES_SQL, {"ids": technique_ids})
+    return {row["technique_id"] for row in rows}
 
 
 def get_mitre_technique(db: ToolDatabase, args: MitreTechniqueInput) -> MitreTechniqueResult:
