@@ -2,7 +2,7 @@
   "$id": "https://sentinelx.local/contracts/v1/verdict.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Structured investigation verdict (CLAUDE.md). Existence of cited IDs is checked in Phase 10.",
+  "description": "Structured investigation verdict. Existence of cited IDs is checked by `grounding.py`.",
   "properties": {
     "verdict": {
       "maxLength": 120,

@@ -1,4 +1,4 @@
-"""Evidence-grounded verdict checks (CLAUDE.md evidence policy, D-016, D-073): pure functions, no I/O."""
+"""Evidence-grounded verdict checks (evidence policy, D-016, D-073): pure functions, no I/O."""
 
 from __future__ import annotations
 

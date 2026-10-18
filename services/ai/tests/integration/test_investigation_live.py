@@ -218,7 +218,7 @@ def test_demo_incident_is_investigated_asynchronously_with_a_schema_valid_verdic
     assert set(verdict.mitre_techniques) <= supported
     assert list(evidence.values()).count("event") == 9 and list(evidence.values()).count("alert") == 4
 
-    print(  # recorded in the Phase 08 handoff (pytest -s)
+    print(  # visible with pytest -s
         json.dumps(
             {
                 "seconds": round(elapsed, 1),

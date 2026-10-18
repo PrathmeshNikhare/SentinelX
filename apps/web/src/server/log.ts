@@ -1,4 +1,4 @@
-// Structured JSON-line logging (CLAUDE.md). Never pass secrets, tokens or passwords in fields.
+// Structured JSON-line logging. Never pass secrets, tokens or passwords in fields.
 type Fields = Record<string, string | number | boolean | null | undefined>;
 
 /**

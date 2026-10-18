@@ -1,7 +1,5 @@
 # services/detection
 
-Owner: Detection Engineer (docs/19_AGENT_OWNERSHIP.md)
-
 Detection worker (D-013, D-046):
 1. consumes `security-events`;
 2. validates each message against `contracts/v1/normalized-event.schema.json`;

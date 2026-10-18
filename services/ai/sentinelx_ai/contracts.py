@@ -19,7 +19,7 @@ UNIQUE = {"uniqueItems": True}
 
 
 class Verdict(BaseModel):
-    """Structured investigation verdict (CLAUDE.md). Existence of cited IDs is checked in Phase 10."""
+    """Structured investigation verdict. Existence of cited IDs is checked by `grounding.py`."""
 
     model_config = ConfigDict(extra="forbid", title="SentinelX verdict v1")
 

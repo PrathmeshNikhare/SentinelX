@@ -10,7 +10,7 @@ Severity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
 
 def severity_for(score: int) -> Severity:
-    """Risk bands from docs/01, also used for rule severities (D-048, D-050)."""
+    """Risk bands from docs/architecture.md, also used for rule severities (D-048, D-050)."""
     if score >= 80:
         return "CRITICAL"
     if score >= 60:

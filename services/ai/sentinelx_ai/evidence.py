@@ -1,7 +1,7 @@
 """Evidence rows for investigations (D-018, D-066): deterministic one-line claims plus the bounded source data.
 
 Claims are written by code, never by the model, so every evidence row says exactly what its data shows. Log fields are
-attacker-controllable; they are clipped here and the prompts label them as untrusted data (docs/15).
+attacker-controllable; they are clipped here and the prompts label them as untrusted data (docs/security.md).
 """
 
 from __future__ import annotations

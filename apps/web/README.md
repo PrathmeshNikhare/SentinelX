@@ -1,8 +1,6 @@
 # apps/web
 
-Owners (docs/19_AGENT_OWNERSHIP.md): Frontend Engineer (UI), Backend Engineer (server/API boundary), Database Engineer (Drizzle schema in `src/db/`, migrations in `drizzle/`, D-009).
-
-Filled in: Phase 01 (schema, migrations, seeds), Phase 02 (console shell, auth, API), Phase 03 (event API, Kafka producer), Phase 08 (investigate/poll endpoints, AI service client), Phase 11 (incident investigation UI, D-074).
+Next.js console, session boundary and user-facing JSON API. The Drizzle schema lives in `src/db/`, migrations in `drizzle/` (D-009).
 
 ## Layout
 - `src/app/` — App Router. `login/` (Server Action sign-in), `(console)/` (authenticated layout, overview, incidents, incident detail, events, loading/error states), `api/` (JSON routes).
@@ -11,7 +9,7 @@ Filled in: Phase 01 (schema, migrations, seeds), Phase 02 (console shell, auth, 
 - `src/components/ui/` — shadcn/ui components; `src/components/console/` — badges, tables, empty/degraded states, sidebar; `src/components/incident/` — incident page sections and the polling refresher (D-074). `src/lib/investigation-view.ts` — pure labels and parsers for stored investigation JSON.
 - `src/db/` — schema, migrator, seeds, admin CLI (`cli.ts`). `drizzle/` — migrations.
 - `src/contracts/` — zod event contracts, source of `contracts/v1/*.schema.json` (D-042). `src/ingest/` — body limits, normalization, ingest token, Kafka producer (D-040–D-043). `src/demo/` — scenario expansion and `send.ts` CLI (D-044).
-- `Dockerfile` — multi-stage image for the console and the `setup` job (D-079). `demo-check/` + `playwright.demo.config.ts` — full-stack demo check against a running stack (D-080, docs/22).
+- `Dockerfile` — multi-stage image for the console and the `setup` job (D-079). `demo-check/` + `playwright.demo.config.ts` — full-stack demo check against a running stack (D-080, docs/setup-and-demo.md).
 - `e2e/` — Playwright suite and its throwaway-database setup (D-037). `walkthrough.spec.ts` walks scenario A through the incident page and saves full-page screenshots to `test-results/`.
 
 ## Commands

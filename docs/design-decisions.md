@@ -1,8 +1,13 @@
-# 23 — Interview Guide: Why, Tradeoffs, Performance, Limitations
+# Design Decisions
 
-How SentinelX is built and why, in a form you can defend in an interview. Every claim points to a decision in `progress/DECISIONS.md` (D-nnn) or a measured result. The system diagram is in `docs/02_ARCHITECTURE.md`.
+How SentinelX is built and why: components, tradeoffs, measured performance, limitations and the questions a reviewer is likely to ask. Every claim points to a decision in [decisions.md](decisions.md) (D-nnn) or a measured result. The system diagram is in [architecture.md](architecture.md).
 
 **One sentence.** Deterministic code detects, scores and correlates. A small local LLM only investigates: it gathers evidence through read-only tools and explains it, and code rejects any verdict that cites something the investigation did not actually retrieve.
+
+## Positioning
+SentinelX is not intended to clone another product.
+
+The engineering distinction is an evidence-first investigation loop with strict separation between deterministic detection/risk and LLM-assisted investigation/explanation.
 
 ## 1. Every major component and why it is there
 | Component | Role | Why this | What it costs / what was rejected | Decisions |
@@ -58,7 +63,7 @@ Where time goes: investigations are LLM-bound (about 9 sequential model calls). 
 - **Accepted security risks:** the 6 ACCEPTED items in docs/21 (local role passwords, whole `.env` per container, CSP inline scripts, loopback HTTP, dev-only npm advisories, single-instance restart handling).
 - **Not built:** SIEM connectors, remediation, multi-tenant auth, Kubernetes or cloud deployment, fine-tuning (all out of scope per docs/01).
 
-## 5. Interview Q&A
+## 5. Design Q&A
 **Why not let the LLM compute the risk score?** It is not reproducible, not auditable and can be talked into anything by log content. The score is a documented formula over rule, anomaly, reputation and correlation inputs, stored with its components (D-004, D-050). The model's severity is shown separately, and a two-level disagreement forces review (D-016).
 
 **How do you stop the LLM from inventing evidence?** Evidence rows are written by code with code-written claims, and the model sees only those IDs. After generation, every cited `ev_` ID must belong to this run, and every MITRE ID must be curated and retrieved in this run, including IDs inside the prose. Otherwise the verdict is rejected and retried once with the failures named; if it fails again, it goes to review with every attempt stored (D-073).

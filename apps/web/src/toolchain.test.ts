@@ -1,4 +1,4 @@
-// Phase 00 smoke test: guards the CLAUDE.md rule "TypeScript strict mode".
+// Phase 00 smoke test: guards the project rule "TypeScript strict mode".
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 

@@ -13,7 +13,7 @@ describe("demo scenarios (D-044)", () => {
     expect(first[0]?.timestamp).toBe("2026-01-01T10:00:00.000Z");
   });
 
-  it("scenario A follows docs/12: five failures, a success, PowerShell, sensitive file reads", () => {
+  it("scenario A follows docs/setup-and-demo.md: five failures, a success, PowerShell, sensitive file reads", () => {
     const events = expandScenario(loadScenario("A"), BASE);
     expect(events.slice(0, 5).every((e) => e.event_type === "authentication" && e.status === "failed")).toBe(true);
     expect(events[5]).toMatchObject({ event_type: "authentication", status: "success" });

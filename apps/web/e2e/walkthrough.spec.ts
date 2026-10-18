@@ -1,4 +1,4 @@
-// Phase 11 exit: a complete attack scenario is understandable from the incident page alone (docs/09 order).
+// Phase 11 exit: a complete attack scenario is understandable from the incident page alone (docs/architecture.md order).
 // Runs after shell.spec.ts (files run alphabetically, one worker). Data is written as the owner exactly as the
 // detection worker and the AI service persist it; the live pipeline is covered in services/detection and services/ai.
 import { readFileSync } from "node:fs";
@@ -167,7 +167,7 @@ test("an analyst can follow scenario A from detection to a grounded verdict on o
     );
     await expect(page.getByTestId("latest-investigation")).toContainText("completed", { timeout: 15_000 });
 
-    // docs/09 order.
+    // docs/architecture.md order.
     const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
     expect(headings).toEqual(SECTION_ORDER);
     await expect(page.getByText("demo scenario data")).toBeVisible();

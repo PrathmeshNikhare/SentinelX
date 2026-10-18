@@ -40,7 +40,7 @@ describe("securityEventInput", () => {
     expect(({} as Record<string, unknown>)["admin"]).toBeUndefined();
   });
 
-  it("accepts the docs/14 shape with or without metadata", () => {
+  it("accepts the docs/api-contracts.md shape with or without metadata", () => {
     expect(securityEventInput.safeParse(valid).success).toBe(true);
     expect(securityEventInput.safeParse({ ...valid, metadata: { mfa: true, geo: { country: "NL" } } }).success).toBe(true);
     expect(securityEventInput.safeParse({ ...valid, timestamp: "2026-01-01T15:30:00+05:30" }).success).toBe(true);
