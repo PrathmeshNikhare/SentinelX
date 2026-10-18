@@ -1,4 +1,4 @@
-// The docs/12 scenario A demo end to end on the real stack (docs/08 E2E): ingest -> alert -> incident -> investigate
+// The docs/setup-and-demo.md scenario A demo end to end on the real stack (docs/development.md E2E): ingest -> alert -> incident -> investigate
 // -> trace -> evidence references -> verdict. Uses only the browser and the public API, like an analyst.
 import { expect, test } from "@playwright/test";
 import { expandScenario, loadScenario } from "../src/demo/scenarios.ts";

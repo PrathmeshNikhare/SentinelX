@@ -1,4 +1,4 @@
-"""Phase 04 exit criterion: demo scenarios A/B/C (docs/12) produce the expected signals and risk."""
+"""Phase 04 exit criterion: demo scenarios A/B/C (docs/setup-and-demo.md) produce the expected signals and risk."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_scenario_a_possible_account_compromise(model: AnomalyModel, base: datet
     assert names[6] == {"suspicious_powershell", "post_compromise_chain"}
     assert names[7] == names[8] == {"sensitive_file_access", "post_compromise_chain"}
     assert all(r.risk_level == "CRITICAL" for r in results[5:])
-    assert max(r.risk_score for r in results) >= 85  # docs/03: "risk ~90"
+    assert max(r.risk_score for r in results) >= 85  # docs/architecture.md: "risk ~90"
     assert all(r.should_alert for r in results[4:])
 
 

@@ -1,6 +1,6 @@
 # Web console image (D-079). Build context: the repo root (docker compose --profile app build).
 # Two stages: the build needs dev dependencies; the runtime installs production dependencies only, so dev-only
-# packages (and their advisories, docs/21 10.2) never ship. `npm prune` is avoided: it fails on optional platform
+# packages (and their advisories, docs/security.md 10.2) never ship. `npm prune` is avoided: it fails on optional platform
 # packages (@tailwindcss/oxide-wasm32-wasi ENOENT).
 FROM node:24.11.0-bookworm-slim AS build
 ENV NEXT_TELEMETRY_DISABLED=1

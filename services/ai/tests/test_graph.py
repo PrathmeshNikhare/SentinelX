@@ -1,4 +1,4 @@
-"""LangGraph investigation without a database or Ollama (docs/05, D-017, D-064-D-067).
+"""LangGraph investigation without a database or Ollama (docs/architecture.md, D-017, D-064-D-067).
 
 An in-memory store records every trace step and evidence row; a scripted LLM returns queued answers per schema.
 """

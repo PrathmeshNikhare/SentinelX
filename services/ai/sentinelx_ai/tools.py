@@ -1,4 +1,4 @@
-"""Typed read-only investigation tools (docs/06, D-060-D-063).
+"""Typed read-only investigation tools (docs/architecture.md, D-060-D-063).
 
 Database tools connect only as the SELECT-only role `sentinelx_ai_tools`, in read-only sessions with a statement
 timeout, and run fixed parameterized queries. Nothing here writes, shells out, opens files or calls the network other

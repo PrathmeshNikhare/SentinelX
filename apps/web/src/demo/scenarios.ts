@@ -1,4 +1,4 @@
-// Deterministic demo scenarios (D-044, docs/12): fixtures/scenarios/*.json -> API payloads.
+// Deterministic demo scenarios (D-044, docs/setup-and-demo.md): fixtures/scenarios/*.json -> API payloads.
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { securityEventInput, type SecurityEventInput } from "../contracts/security-event.ts";

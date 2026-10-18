@@ -1,4 +1,4 @@
-"""Agent tools without a database (docs/06, D-060-D-063): schemas, bounds, registry, error mapping, capabilities."""
+"""Agent tools without a database (D-060-D-063): schemas, bounds, registry, error mapping, capabilities."""
 
 from __future__ import annotations
 
@@ -326,7 +326,7 @@ def test_database_failures_become_tool_errors_without_details(
     assert "SELECT" not in str(caught.value) and "canceling" not in str(caught.value)
 
 
-# --- forbidden capabilities (docs/06) --------------------------------------------------------------------------------
+# --- forbidden capabilities --------------------------------------------------------------------------------
 
 ALLOWED_IMPORTS = {
     "__future__",

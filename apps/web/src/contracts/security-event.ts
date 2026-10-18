@@ -41,7 +41,7 @@ const metadata = z
   })
   .meta({ description: `Free-form JSON object, keys 1-64 chars, serialized size <= ${MAX_METADATA_BYTES} bytes.` });
 
-/** Body of POST /api/events (docs/14). Unknown fields are rejected. */
+/** Body of POST /api/events (docs/api-contracts.md). Unknown fields are rejected. */
 export const securityEventInput = z
   .strictObject({
     event_id: eventId,

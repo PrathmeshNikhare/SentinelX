@@ -1,4 +1,4 @@
-// POST /api/events (docs/14, D-041, D-043): authenticate, size-limit, parse, validate, normalize, publish to Kafka.
+// POST /api/events (docs/api-contracts.md, D-041, D-043): authenticate, size-limit, parse, validate, normalize, publish to Kafka.
 // The API does not write to PostgreSQL; the detection worker persists and deduplicates events (D-014).
 import { NextResponse } from "next/server";
 import type { z } from "zod";

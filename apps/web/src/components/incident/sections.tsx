@@ -1,4 +1,4 @@
-// Incident page sections (Phase 11, docs/09 order). Server components: they render data, they fetch nothing.
+// Incident page sections (Phase 11, docs/architecture.md order). Server components: they render data, they fetch nothing.
 import type { ReactNode } from "react";
 import { SeverityBadge } from "@/components/console/badges";
 import { EmptyState, Mono } from "@/components/console/states";

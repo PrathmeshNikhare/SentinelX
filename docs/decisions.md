@@ -1,4 +1,19 @@
-# SentinelX Decisions
+# Decision Log
+
+Architecture decision records (D-nnn) for SentinelX, in the order they were made. Code comments, tests and the other docs cite these IDs. Entries are append-only: a later entry that changes an earlier one says so.
+
+Entries were written while the project was built in numbered phases and refer to the design docs by their original numbers. Those docs are now consolidated:
+
+| Original reference | Now in |
+|---|---|
+| docs/01 (requirements), 02 (architecture), 03 (workflow), 04 (data model), 05 (agent), 06 (tools), 09 (UI) | [architecture.md](architecture.md) |
+| docs/08 (test plan), 10 (coding standards), 16 (environment) | [development.md](development.md) |
+| docs/11 (security rules), 15 (prompt policy), 21 (security checklist) | [security.md](security.md) |
+| docs/12 (demo scenarios), 22 (demo) | [setup-and-demo.md](setup-and-demo.md) |
+| docs/14 (API contracts) | [api-contracts.md](api-contracts.md) |
+| docs/17 (research notes), 23 (interview guide) | [design-decisions.md](design-decisions.md) |
+
+Where an entry mentions the project constitution (`CLAUDE.md`), a phase or a handoff, those were development-process artefacts that are not part of this repository.
 
 ### D-001 — Next.js App Router
 Use Next.js App Router + TypeScript for the web application.
@@ -20,8 +35,6 @@ Qdrant is used for semantic retrieval, not as the operational database.
 
 ### D-007 — Ollama
 Ollama is the default local LLM runtime.
-
-Add new decisions below. Do not rewrite old decisions without documenting the change.
 
 ### D-008 — This directory is the SentinelX repository (2026-10-08)
 The harness directory is the repository root (`git init -b main`, baseline commit `fbf08f9`). It is not copied into a separate repo. Parent directories are not part of the project.

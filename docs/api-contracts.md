@@ -5,14 +5,14 @@ Contracts are versioned before cross-service implementation.
 ## Browser-facing API (Next.js)
 All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error": {"code", "message", ...}}`: `401 unauthorized` (no/invalid/revoked session), `404 not_found`, `409` conflicts, `503 unavailable` (database or AI service unreachable).
 
-| Route | Status (Phase 02) |
+| Route | Status |
 |---|---|
 | `GET /api/incidents` | implemented: `{incidents: [...]}` (latest 100) |
-| `GET /api/incidents/:id` | implemented: `{incident: {..., events: [{..., signals: [...]}], alerts: [{id, eventId, riskScore, anomalyScore, severity, reasons}]}}` (signals and alerts since Phase 11, D-074); malformed or unknown id → 404 |
-| `PATCH /api/incidents/:id` | implemented (Phase 05, D-054): body exactly `{"status": "open"\|"investigating"\|"resolved"}` → 200 `{incident: {id, status}}`; 400 bad body, 404, 409 `invalid_transition` with `current`, 413, 415 |
-| `POST /api/events` | implemented (Phase 03): see below |
-| `POST /api/incidents/:id/investigate` | implemented (Phase 08, D-069): 202 `{investigation_run_id}`; 404 unknown incident; 409 `investigation_in_progress`; 503 AI service unavailable |
-| `GET /api/investigations/:id` | implemented (Phase 08, D-069): `{investigation: {id, incidentId, status, requiresReview, verdict, validationErrors ([{attempt, code, detail, effect}], D-073), modelName, promptVersion, errorMessage, createdAt, startedAt, completedAt, trace: [...], evidence: [...]}}`; 404 malformed/unknown |
+| `GET /api/incidents/:id` | implemented: `{incident: {..., events: [{..., signals: [...]}], alerts: [{id, eventId, riskScore, anomalyScore, severity, reasons}]}}` (signals and alerts D-074); malformed or unknown id → 404 |
+| `PATCH /api/incidents/:id` | implemented (D-054): body exactly `{"status": "open"\|"investigating"\|"resolved"}` → 200 `{incident: {id, status}}`; 400 bad body, 404, 409 `invalid_transition` with `current`, 413, 415 |
+| `POST /api/events` | implemented: see below |
+| `POST /api/incidents/:id/investigate` | implemented (D-069): 202 `{investigation_run_id}`; 404 unknown incident; 409 `investigation_in_progress`; 503 AI service unavailable |
+| `GET /api/investigations/:id` | implemented (D-069): `{investigation: {id, incidentId, status, requiresReview, verdict, validationErrors ([{attempt, code, detail, effect}], D-073), modelName, promptVersion, errorMessage, createdAt, startedAt, completedAt, trace: [...], evidence: [...]}}`; 404 malformed/unknown |
 
 `POST /api/events`
 ```json
@@ -35,7 +35,7 @@ All routes require a valid `sx_session` cookie (D-034). Errors are JSON `{"error
 - Effect: one message on topic `security-events`, key = normalized `user_id`, value = `contracts/v1/normalized-event.schema.json`, headers `schema-version: v1`, `content-type: application/json`. The API never writes to PostgreSQL (D-014).
 - The contracts are generated from `apps/web/src/contracts/security-event.ts` with `npm run contracts:generate`; a unit test fails on drift (D-042).
 
-## Internal AI service (FastAPI, Phase 06; D-057, D-058)
+## Internal AI service (FastAPI; D-057, D-058)
 Bound to `127.0.0.1:8000`, called only by the Next.js server. Every route except `/health` needs `Authorization: Bearer <AI_SERVICE_TOKEN>`; the check runs before routing and body parsing. OpenAPI docs are disabled. Errors use `{"error": {"code", "message", ...}}`.
 
 | Route | Behaviour |

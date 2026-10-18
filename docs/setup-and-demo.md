@@ -1,6 +1,6 @@
-# 22 — Clean-Machine Setup and Demo
+# Setup and Demo
 
-Runs the whole SentinelX stack in Docker Compose (D-079) and walks demo scenario A (docs/12) from raw events to an evidence-grounded verdict. Development with apps on the host is described in `docs/16_ENVIRONMENT.md`.
+Runs the whole SentinelX stack in Docker Compose (D-079) and walks demo scenario A (scenarios below) from raw events to an evidence-grounded verdict. Development with apps on the host is described in [development.md](development.md).
 
 ## Prerequisites
 - Docker Desktop (Windows/macOS) or Docker Engine with Compose v2 (Linux). Allow about 6 GB of memory for Docker. The app images take about 4.4 GB of disk (AI 2.3 GB, web 1.6 GB, detection 0.6 GB), plus the infrastructure images.
@@ -72,3 +72,20 @@ docker compose --profile app down -v       # also delete PostgreSQL and Qdrant d
 - **`ai` unhealthy or investigations failing with "Ollama unavailable".** Check that Ollama runs on the host with `OLLAMA_MODEL` pulled (`curl http://localhost:11434/api/tags`). The service logs are in `docker compose logs ai`.
 - **Port 3000 in use.** Stop the host dev server (`npm run dev`) before starting the `web` container.
 - **Low memory.** Ollama needs about 2.5 GB while generating, and the AI container about 1 GB. Close other workloads; investigations are the only memory-heavy step.
+
+## Demo scenarios
+### A — Possible Account Compromise
+5 failed logins -> successful login from new IP -> high-risk reputation -> PowerShell -> sensitive file access.
+Expected: brute-force, unusual-login and PowerShell signals; elevated anomaly; HIGH/CRITICAL risk; incident; investigation; evidence-backed compromise verdict.
+
+### B — Benign Admin Activity
+Expected maintenance from known IP with normal access. Expected low/medium risk and no invented compromise.
+
+### C — Anomalous but Unclear
+Unusual time/IP without known malicious command. Expected anomaly and cautious verification-oriented verdict.
+
+Every scenario must be generated deterministically from fixtures/scripts.
+
+The sections above run these on the containerized stack (D-080), and `apps/web/demo-check/` automates scenario A end to end.
+
+Implemented as `fixtures/scenarios/scenario-{a,b,c}.json` (offsets in seconds, synthetic IPs only) and `npm run demo:send -- <A|B|C> [--base <ISO>] [--url <base-url>]`, which posts each event to `POST /api/events`. Event IDs are `demo-<scenario>-<base>-<nn>`, so the same base reproduces the same events.

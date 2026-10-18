@@ -14,3 +14,4 @@
 **/playwright-report
 .drift-check
 services/detection/models
+docs

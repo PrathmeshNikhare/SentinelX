@@ -40,7 +40,7 @@ def test_examples_satisfy_their_contracts() -> None:
         ({"verdict": "ok"}, "verdict"),
         ({"summary": ""}, "summary"),
         ({"evidence_ids": []}, "evidence_ids"),
-        ({"evidence_ids": ["ev_1"]}, "evidence_ids"),  # the CLAUDE.md illustration is not the real ID format (D-030)
+        ({"evidence_ids": ["ev_1"]}, "evidence_ids"),  # the illustrative ID format is not the real one (D-030)
         ({"evidence_ids": ["ev_1a2b3c4d5e6f7a8b", "ev_1a2b3c4d5e6f7a8b"]}, "evidence_ids"),
         ({"mitre_techniques": ["T110"]}, "mitre_techniques"),
         ({"mitre_techniques": ["T1110", "T1110"]}, "mitre_techniques"),

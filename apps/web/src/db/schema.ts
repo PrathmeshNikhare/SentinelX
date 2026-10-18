@@ -1,4 +1,4 @@
-// SentinelX PostgreSQL schema (docs/04_DATA_MODEL.md). Drizzle migrations are the only DDL source (D-010).
+// SentinelX PostgreSQL schema (docs/architecture.md). Drizzle migrations are the only DDL source (D-010).
 import { sql } from "drizzle-orm";
 import {
   boolean,

@@ -1,4 +1,4 @@
-"""Evidence-grounded verdict validation (CLAUDE.md evidence policy, D-016, D-019, D-073).
+"""Evidence-grounded verdict validation (evidence policy, D-016, D-019, D-073).
 
 Pure functions over a schema-valid verdict and the run's evidence. Findings name IDs and field paths only, never
 free model text, so they can be stored, logged and fed back to the model safely.

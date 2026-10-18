@@ -1,4 +1,4 @@
-"""LangGraph investigation (docs/05, D-015-D-018, D-064-D-068, D-073).
+"""LangGraph investigation (docs/architecture.md, D-015-D-018, D-064-D-068, D-073).
 
 START -> load_incident -> analyze_evidence -> choose_next_action -> execute_tool -> store_evidence -> analyze_evidence
       -> ... -> build_verdict -> validate_verdict -> END
@@ -6,7 +6,7 @@ START -> load_incident -> analyze_evidence -> choose_next_action -> execute_tool
 The LLM proposes one action at a time; the proposal is validated against the tool's input schema, the available
 tools, earlier actions and the step budget. Anything invalid, or an unavailable Ollama, falls back to a deterministic
 plan for the incident. Every step is appended to `investigation_trace`, every tool result to `evidence`. No hidden
-reasoning is requested or stored (docs/15).
+reasoning is requested or stored (docs/security.md).
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ from .store import IncidentContext, Origin, Store
 from .tools import MAX_WINDOW, TOOL_INPUTS, ToolDatabase, ToolError, known_techniques
 
 PROMPT_VERSION: Final = "investigation-v2"  # v2: grounded verdict prompt and checks (D-073)
-MAX_STEPS: Final = 8  # tool executions per run (docs/05)
-MAX_VERDICT_ATTEMPTS: Final = 2  # invalid verdict JSON: retry once, then review (docs/05)
+MAX_STEPS: Final = 8  # tool executions per run (docs/architecture.md)
+MAX_VERDICT_ATTEMPTS: Final = 2  # invalid verdict JSON: retry once, then review (docs/architecture.md)
 RECURSION_LIMIT: Final = 4 * MAX_STEPS + 10  # LangGraph safety net above the step budget
 HISTORY_LOOKBACK: Final = timedelta(hours=24)
 MAX_PLAN_IPS: Final = 3
@@ -73,7 +73,7 @@ VERDICT_SYSTEM: Final = (
 
 
 class ActionProposal(BaseModel):
-    """The LLM's choice in `choose_next_action` (D-017). No free-text rationale: no hidden reasoning (docs/15)."""
+    """The LLM's choice in `choose_next_action` (D-017). No free-text rationale: no hidden reasoning."""
 
     model_config = ConfigDict(extra="forbid")
 
